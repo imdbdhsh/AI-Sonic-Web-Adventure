@@ -741,11 +741,19 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
                 onChange={(e) => onSelectLevel(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-xs bg-[#0B0F19] border border-slate-800 rounded-lg text-white focus:outline-none focus:border-blue-500"
               >
-                {levels.map((lvl) => (
-                  <option key={lvl.id} value={lvl.id}>
-                    {lvl.name} — Act {lvl.act}
-                  </option>
-                ))}
+                {levels
+                  .filter(
+                    (lvl) =>
+                      lvl.id !== 'broken-test-01' ||
+                      activeLevel.id === 'broken-test-01'
+                  )
+                  .map((lvl) => (
+                    <option key={lvl.id} value={lvl.id}>
+                      {lvl.id === 'broken-test-01'
+                        ? 'Broken Test 01'
+                        : `${lvl.name} — Act ${lvl.act}`}
+                    </option>
+                  ))}
               </select>
             </div>
 

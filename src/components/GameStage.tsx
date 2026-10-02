@@ -826,9 +826,10 @@ export const GameStage: React.FC<GameStageProps> = ({
     ? CHARACTER_SPECS[p1Character].hyperName
     : CHARACTER_SPECS[p1Character].superName;
 
+  const normalLevels = levels.filter((l) => l.id !== 'broken-test-01');
   const currentActIndex = Math.max(
     0,
-    levels.findIndex((l) => l.id === activeLevel.id)
+    normalLevels.findIndex((l) => l.id === activeLevel.id)
   );
 
   return (
@@ -841,7 +842,7 @@ export const GameStage: React.FC<GameStageProps> = ({
               Play Game · No-Cheats Mode
             </span>
             <span className="text-sm font-bold text-white">
-              Stage {currentActIndex + 1} of {levels.length}: {activeLevel.name} — Act{' '}
+              Stage {currentActIndex + 1} of {normalLevels.length}: {activeLevel.name} — Act{' '}
               {activeLevel.act}
             </span>
             <span className="text-xs text-slate-300">
@@ -881,7 +882,9 @@ export const GameStage: React.FC<GameStageProps> = ({
               >
                 {levels.map((lvl) => (
                   <option key={lvl.id} value={lvl.id}>
-                    {lvl.name} — Act {lvl.act}
+                    {lvl.id === 'broken-test-01'
+                      ? 'Broken Test 01'
+                      : `${lvl.name} — Act ${lvl.act}`}
                   </option>
                 ))}
               </select>
@@ -1313,8 +1316,11 @@ export const GameStage: React.FC<GameStageProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    const idx = levels.findIndex((l) => l.id === activeLevel.id);
-                    const nextLvl = levels[(idx + 1) % levels.length];
+                    const idx = normalLevels.findIndex((l) => l.id === activeLevel.id);
+                    const nextLvl =
+                      idx !== -1
+                        ? normalLevels[(idx + 1) % normalLevels.length]
+                        : normalLevels[0];
                     onClearCheckpointSession(nextLvl.id);
                     onSelectLevel(nextLvl.id);
                   }}

@@ -1166,9 +1166,9 @@ function buildEmeraldMountainsAct2(): LevelData {
 }
 
 // ============================================================================
-// LEVEL 3: EMERALD MOUNTAINS ZONE — ACT 3 (Sky Citadel Towers, High-Y & Secrets!)
+// UNUSED STAGE: BROKEN TEST 01 (Only accessible via "Active Zone & Act" selector)
 // ============================================================================
-function buildEmeraldMountainsAct3(): LevelData {
+function buildBrokenTest01(): LevelData {
   const width = 260;
   const height = 96; // High-altitude 96-row vertical level (3,072px tall!)
   const grid = createEmptyGrid(width, height);
@@ -1444,9 +1444,9 @@ function buildEmeraldMountainsAct3(): LevelData {
   grid[35][248] = TileType.GOAL_POST;
 
   return {
-    id: 'emerald-mountains-act-3',
-    name: 'Emerald Mountains',
-    act: 3,
+    id: 'broken-test-01',
+    name: 'Broken Test 01',
+    act: 1,
     author: 'Sonic Velocity Studio',
     width,
     height,
@@ -2171,7 +2171,6 @@ function buildDeathEggZone(): LevelData {
 export const DEFAULT_LEVELS: LevelData[] = [
   buildEmeraldMountainsAct1(),
   buildEmeraldMountainsAct2(),
-  buildEmeraldMountainsAct3(),
   buildMarbleZoneAct1(),
   buildMarbleZoneAct2(),
   buildNeoStarlightAct1(),
@@ -2179,6 +2178,7 @@ export const DEFAULT_LEVELS: LevelData[] = [
   buildHillTopPeaksAct1(),
   buildHillTopPeaksAct2(),
   buildDeathEggZone(),
+  buildBrokenTest01(),
 ];
 
 /**

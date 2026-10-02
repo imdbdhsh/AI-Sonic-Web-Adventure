@@ -37,7 +37,7 @@ type ActiveWorkspaceTab =
   | 'multiplayer';
 
 const STORAGE_KEYS = {
-  LEVELS: 'sonic_velocity_levels_v14',
+  LEVELS: 'sonic_velocity_levels_v15',
   TILESETS: 'sonic_velocity_tilesets_v14',
   SPECIAL_STAGES: 'sonic_velocity_special_stages_v11',
   EMERALDS: 'sonic_velocity_emeralds_v11',
@@ -50,12 +50,28 @@ const STORAGE_KEYS = {
 };
 
 function ensureDeathEggIsLastZone(list: LevelData[]): LevelData[] {
-  const defaultDeathEgg = DEFAULT_LEVELS[DEFAULT_LEVELS.length - 1];
-  const found = list.find((l) => l.id === 'death-egg-zone');
+  const defaultDeathEgg =
+    DEFAULT_LEVELS.find((l) => l.id === 'death-egg-zone') ||
+    DEFAULT_LEVELS[DEFAULT_LEVELS.length - 2];
+  const defaultBrokenTest = DEFAULT_LEVELS.find(
+    (l) => l.id === 'broken-test-01'
+  );
+  const foundDeathEgg = list.find((l) => l.id === 'death-egg-zone');
   const existingDeathEgg =
-    found && found.width >= 232 ? found : defaultDeathEgg;
-  const others = list.filter((l) => l.id !== 'death-egg-zone');
-  return [...others, existingDeathEgg];
+    foundDeathEgg && foundDeathEgg.width >= 232
+      ? foundDeathEgg
+      : defaultDeathEgg;
+  const existingBrokenTest =
+    list.find((l) => l.id === 'broken-test-01') || defaultBrokenTest;
+  const others = list.filter(
+    (l) =>
+      l.id !== 'death-egg-zone' &&
+      l.id !== 'broken-test-01' &&
+      l.id !== 'emerald-mountains-act-3'
+  );
+  return existingBrokenTest
+    ? [...others, existingDeathEgg, existingBrokenTest]
+    : [...others, existingDeathEgg];
 }
 
 export default function App() {
@@ -164,7 +180,13 @@ export default function App() {
   const [campaignLevelId, setCampaignLevelId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CAMPAIGN_LEVEL_ID);
-      if (saved && DEFAULT_LEVELS.some((l) => l.id === saved)) return saved;
+      if (
+        saved &&
+        saved !== 'broken-test-01' &&
+        DEFAULT_LEVELS.some((l) => l.id === saved)
+      ) {
+        return saved;
+      }
     } catch {
       // Fallback
     }
