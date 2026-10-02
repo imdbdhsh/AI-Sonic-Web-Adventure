@@ -1,0 +1,6 @@
+{
+  "name": "Sonic: Web Adventure",
+  "description": "A 16-bit 2D Sonic the Hedgehog web physics engine featuring Sonic, Tails, and Knuckles, local 2-player split-screen and co-op multiplayer, a full level editor, and custom tileset studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
