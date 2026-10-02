@@ -34,7 +34,12 @@ interface TilesetStudioProps {
   onDeleteTileset: (id: string) => void;
 }
 
-type TextureCategory = 'white_blocks' | 'terrain' | 'gimmicks' | 'items';
+type TextureCategory =
+  | 'white_blocks'
+  | 'terrain'
+  | 'gimmicks'
+  | 'items'
+  | 'bosses';
 
 interface TextureSlotMeta {
   key: EditableTextureKey;
@@ -76,7 +81,13 @@ const TEXTURE_SLOTS: TextureSlotMeta[] = [
   { key: 'slope45Down', label: '45° Steep Slope Down', category: 'terrain' },
 
   // Gimmicks, Hazards & Springs
-  { key: 'spikes', label: 'Hazard Spikes', category: 'gimmicks' },
+  { key: 'spikes', label: 'Floor Spikes', category: 'gimmicks' },
+  { key: 'ceilingSpikes', label: 'Ceiling Spikes', category: 'gimmicks' },
+  { key: 'stalactite', label: 'Falling Stalactite', category: 'gimmicks' },
+  { key: 'acidPool', label: 'Boiling Acid Pool', category: 'gimmicks' },
+  { key: 'steamVent', label: 'Steam Vent', category: 'gimmicks' },
+  { key: 'tubeEntry', label: 'Travel Tube Intake', category: 'gimmicks' },
+  { key: 'tubeExit', label: 'Travel Tube Exit', category: 'gimmicks' },
   { key: 'lava', label: 'Molten Lava', category: 'gimmicks' },
   { key: 'springYellow', label: 'Yellow Spring ↑', category: 'gimmicks' },
   { key: 'springRed', label: 'Red High Spring ↑', category: 'gimmicks' },
@@ -100,7 +111,7 @@ const TEXTURE_SLOTS: TextureSlotMeta[] = [
   // Rings, Monitors & Markers
   { key: 'ring', label: 'Golden Ring', category: 'items' },
   { key: 'giantRing', label: 'Giant Special Ring', category: 'items' },
-  { key: 'monitor1Up', label: 'Monitor: 1-UP Extra Life', category: 'items' },
+  { key: 'monitor1up', label: 'Monitor: 1-UP Extra Life', category: 'items' },
   { key: 'monitorRing', label: 'Monitor: +10 Rings', category: 'items' },
   { key: 'monitorSpeed', label: 'Monitor: Speed Shoes', category: 'items' },
   { key: 'monitorShield', label: 'Monitor: Blue Shield', category: 'items' },
@@ -113,6 +124,10 @@ const TEXTURE_SLOTS: TextureSlotMeta[] = [
   { key: 'monitorSuper', label: 'Monitor: Super "S"', category: 'items' },
   { key: 'checkpoint', label: 'Star Post Checkpoint', category: 'items' },
   { key: 'goalPost', label: 'Goal Signpost', category: 'items' },
+
+  // Mecha Boss Plates (Chemical Plant & Mystic Caverns Act 2 bosses)
+  { key: 'bossChemical', label: 'Slime-Crusher Mech Plate', category: 'bosses' },
+  { key: 'bossMystic', label: 'Egg Drill-Crusher Plate', category: 'bosses' },
 ];
 
 const QUICK_SWATCHES = [
@@ -543,13 +558,15 @@ export const TilesetStudio: React.FC<TilesetStudioProps> = ({
 
             <div>
               <label className="block text-xs text-slate-400 mb-1">
-                Background Parallax Scenery (All 5 Styles)
+                Background Parallax Scenery (All 7 Styles)
               </label>
               <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#0B0F19] rounded-lg border border-slate-800">
                 {(
                   [
                     'palms',
                     'chemical',
+                    'chemicalplant',
+                    'cave',
                     'marble',
                     'sanctuary',
                     'deathegg',
@@ -566,7 +583,13 @@ export const TilesetStudio: React.FC<TilesetStudioProps> = ({
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    {style === 'deathegg' ? 'Death Egg' : style}
+                    {style === 'deathegg'
+                      ? 'Death Egg'
+                      : style === 'chemicalplant'
+                      ? 'Chem Plant'
+                      : style === 'cave'
+                      ? 'Caverns'
+                      : style}
                   </button>
                 ))}
               </div>
@@ -611,7 +634,7 @@ export const TilesetStudio: React.FC<TilesetStudioProps> = ({
         </div>
       </div>
 
-      {/* Right Column: Complete Tile Texture Editor (All 50 Tiles + 10 Blank White Blocks + Custom Color Picker) */}
+      {/* Right Column: Complete Tile Texture Editor (All Zone Tiles + 10 Blank White Blocks + Mecha Boss Plates) */}
       <div className="lg:col-span-8 space-y-6">
         <div className="bg-[#131B2E] border border-slate-800 rounded-xl p-6 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -629,9 +652,10 @@ export const TilesetStudio: React.FC<TilesetStudioProps> = ({
               {(
                 [
                   ['white_blocks', '10 Blank White Blocks'],
-                  ['terrain', 'Terrain & Slopes (11)'],
-                  ['gimmicks', 'Gimmicks & Hazards (18)'],
+                  ['terrain', 'Terrain & Slopes (20)'],
+                  ['gimmicks', 'Gimmicks & Hazards (24)'],
                   ['items', 'Rings & Monitors (15)'],
+                  ['bosses', 'Mecha Boss Plates (2)'],
                 ] as const
               ).map(([catKey, catLabel]) => (
                 <button

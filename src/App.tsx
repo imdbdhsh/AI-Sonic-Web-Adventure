@@ -11,6 +11,7 @@ import {
   DEFAULT_LEVELS,
   DEFAULT_SPECIAL_STAGES,
   DEFAULT_TILESETS,
+  orderCampaignLevels,
 } from './data/presets';
 import { invalidateTilesetCache } from './engine/renderer';
 import {
@@ -37,42 +38,17 @@ type ActiveWorkspaceTab =
   | 'multiplayer';
 
 const STORAGE_KEYS = {
-  LEVELS: 'sonic_velocity_levels_v15',
-  TILESETS: 'sonic_velocity_tilesets_v14',
+  LEVELS: 'sonic_velocity_levels_v16',
+  TILESETS: 'sonic_velocity_tilesets_v15',
   SPECIAL_STAGES: 'sonic_velocity_special_stages_v11',
   EMERALDS: 'sonic_velocity_emeralds_v11',
   SUPER_EMERALDS: 'sonic_velocity_super_emeralds_v11',
   CAMPAIGN_EMERALDS: 'sonic_velocity_campaign_emeralds_v11',
   CAMPAIGN_SUPER_EMERALDS: 'sonic_velocity_campaign_super_emeralds_v11',
   CAMPAIGN_LEVEL_ID: 'sonic_velocity_campaign_level_v11',
-  LIVES: 'sonic_velocity_lives_v14',
-  CAMPAIGN_LIVES: 'sonic_velocity_campaign_lives_v14',
+  LIVES: 'sonic_velocity_lives_v15',
+  CAMPAIGN_LIVES: 'sonic_velocity_campaign_lives_v15',
 };
-
-function ensureDeathEggIsLastZone(list: LevelData[]): LevelData[] {
-  const defaultDeathEgg =
-    DEFAULT_LEVELS.find((l) => l.id === 'death-egg-zone') ||
-    DEFAULT_LEVELS[DEFAULT_LEVELS.length - 2];
-  const defaultBrokenTest = DEFAULT_LEVELS.find(
-    (l) => l.id === 'broken-test-01'
-  );
-  const foundDeathEgg = list.find((l) => l.id === 'death-egg-zone');
-  const existingDeathEgg =
-    foundDeathEgg && foundDeathEgg.width >= 232
-      ? foundDeathEgg
-      : defaultDeathEgg;
-  const existingBrokenTest =
-    list.find((l) => l.id === 'broken-test-01') || defaultBrokenTest;
-  const others = list.filter(
-    (l) =>
-      l.id !== 'death-egg-zone' &&
-      l.id !== 'broken-test-01' &&
-      l.id !== 'emerald-mountains-act-3'
-  );
-  return existingBrokenTest
-    ? [...others, existingDeathEgg, existingBrokenTest]
-    : [...others, existingDeathEgg];
-}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveWorkspaceTab>('play');
@@ -99,13 +75,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return ensureDeathEggIsLastZone(parsed);
+          return orderCampaignLevels(parsed);
         }
       }
     } catch {
       // Fallback to default levels
     }
-    return ensureDeathEggIsLastZone(DEFAULT_LEVELS);
+    return orderCampaignLevels(DEFAULT_LEVELS);
   });
 
   const [specialStages, setSpecialStages] = useState<SpecialStageData[]>(() => {
@@ -344,21 +320,21 @@ export default function App() {
 
   const handleUpdateLevel = (updated: LevelData) => {
     setLevels((prev) =>
-      ensureDeathEggIsLastZone(
+      orderCampaignLevels(
         prev.map((l) => (l.id === updated.id ? updated : l))
       )
     );
   };
 
   const handleCreateLevel = (newLevel: LevelData) => {
-    setLevels((prev) => ensureDeathEggIsLastZone([...prev, newLevel]));
+    setLevels((prev) => orderCampaignLevels([...prev, newLevel]));
   };
 
   const handleDeleteLevel = (id: string) => {
     // Death Egg Zone is always the final zone and cannot be deleted
     if (id === 'death-egg-zone') return;
     setLevels((prev) => {
-      const filtered = ensureDeathEggIsLastZone(
+      const filtered = orderCampaignLevels(
         prev.filter((l) => l.id !== id)
       );
       if (activeLevelId === id && filtered.length > 0) {
@@ -520,9 +496,9 @@ export default function App() {
             if (existingIdx !== -1) {
               const updated = [...prev];
               updated[existingIdx] = importedLevel;
-              return ensureDeathEggIsLastZone(updated);
+              return orderCampaignLevels(updated);
             }
-            return ensureDeathEggIsLastZone([...prev, importedLevel]);
+            return orderCampaignLevels([...prev, importedLevel]);
           });
 
           setActiveLevelId(importedLevel.id);

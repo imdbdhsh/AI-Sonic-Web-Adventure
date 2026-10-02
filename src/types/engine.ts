@@ -123,6 +123,15 @@ export enum TileType {
   SWINGING_PLATFORM = 82,
   MOVING_PLATFORM_VERT = 83,
   MONITOR_1UP = 84,
+  // Chemical Plant Zone & Mystic Caverns Zone Tiles
+  SPIKES_DOWN = 85,          // Ceiling Spikes (Lethal from below, solid plate on top)
+  GIMMICK_STALACTITE = 86,   // Mystic Caverns: Falling Rock Stalactite (Detaches under players)
+  GIMMICK_ACID_POOL = 87,    // Chemical Plant: Boiling Toxic Blue Chemical Pool (Non-shielded take damage)
+  GIMMICK_STEAM_VENT = 88,   // Chemical Plant: Periodic Steam Vent (Launches players skyward)
+  GIMMICK_TUBE_ENTRY = 89,   // Chemical Plant: Travel Tube Entrance (Fall in from above)
+  GIMMICK_TUBE_EXIT = 90,    // Chemical Plant: Travel Tube Exit (Launches players out)
+  BOSS_CHEMICAL = 91,        // Chemical Plant Act 2 Boss: Hydraulic Slime-Crusher & Siphon Mech
+  BOSS_MYSTIC = 92,          // Mystic Caverns Act 2 Boss: Egg Drill-Crusher
 }
 
 export enum SpecialTileType {
@@ -197,6 +206,14 @@ export type EditableTextureKey =
   | 'springLeft'
   | 'boosterRight'
   | 'boosterLeft'
+  | 'ceilingSpikes'
+  | 'stalactite'
+  | 'acidPool'
+  | 'steamVent'
+  | 'tubeEntry'
+  | 'tubeExit'
+  | 'bossChemical'
+  | 'bossMystic'
   | 'bumper'
   | 'dashRing'
   | 'crusher'
@@ -250,7 +267,14 @@ export interface TilesetConfig {
   id: string;
   name: string;
   zoneSubtitle: string;
-  decorStyle: 'palms' | 'chemical' | 'marble' | 'sanctuary' | 'deathegg';
+  decorStyle:
+    | 'palms'
+    | 'chemical'
+    | 'chemicalplant'
+    | 'cave'
+    | 'marble'
+    | 'sanctuary'
+    | 'deathegg';
   palette: TilesetPalette;
   customPixels?: CustomPixelMatrix;
   uploadedSheetDataUrl?: string;
@@ -359,6 +383,9 @@ export interface PlayerEntity {
   loopAngle: number;
   loopDir: 1 | -1;
   loopCooldown: number;
+  // Chemical Plant Travel Tube state (set while riding a tube network)
+  tubeTravel?: TubeTravelState | null;
+  tubeCooldown?: number;
   camX: number;
   camY: number;
   camLookOffsetY: number;
@@ -372,6 +399,39 @@ export interface PlayerEntity {
   // Redone 360° Loop-de-Loop state & Ray swoop pitch
   loopProgress?: number;
   raySwoopPitch?: number;
+}
+
+export interface TubeTravelState {
+  // Poly-line route through the tube network (world pixel coordinates)
+  points: Array<{ x: number; y: number }>;
+  segment: number;       // Current segment index
+  speed: number;         // Travel speed in px/frame
+  exitVx: number;        // Launch velocity once the ride finishes
+  exitVy: number;
+  entryX: number;
+  entryY: number;
+}
+
+export type MechHazardKind =
+  | 'stalactite'
+  | 'debris'
+  | 'shockwave'
+  | 'steam'
+  | 'steam_burst';
+
+export interface ActiveHazard {
+  id: number;
+  kind: MechHazardKind;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+  damaging: boolean;
+  color: string;
+  facing?: 1 | -1;
 }
 
 export interface DynamicPlatform {
@@ -426,9 +486,31 @@ export type DeathEggPhase =
   | 'fire_arms'
   | 'deploy_bombs';
 
+export type MechBossPhase =
+  // Hydraulic Slime-Crusher & Siphon Mech (Chemical Plant Act 2)
+  | 'mech_advance'
+  | 'piston_stomp'
+  | 'chemical_flood'
+  | 'siphon_vortex'
+  | 'overheat_venting'
+  // Egg Drill-Crusher (Mystic Caverns Act 2)
+  | 'drill_rev'
+  | 'drill_charge'
+  | 'wall_crash_stun'
+  | 'ceiling_burrow'
+  | 'ground_slam';
+
 export interface ActiveBoss {
   id: string;
-  bossType: 'eggman' | 'marble' | 'starlight' | 'hilltop' | 'silversonic' | 'deathegg';
+  bossType:
+    | 'eggman'
+    | 'marble'
+    | 'starlight'
+    | 'hilltop'
+    | 'chemical'
+    | 'mystic'
+    | 'silversonic'
+    | 'deathegg';
   x: number;
   y: number;
   startX: number;
@@ -452,6 +534,20 @@ export interface ActiveBoss {
   targetReticleY?: number;
   targetReticleLocked?: boolean;
   armsLaunched?: 0 | 1 | 2;
+  // ===== Hydraulic Slime-Crusher & Siphon Mech / Egg Drill-Crusher shared state =====
+  mechPhase?: MechBossPhase;
+  mechTimer?: number;        // Frame counter inside the current mech phase
+  mechFloorY?: number;       // World Y of the arena floor (top surface)
+  mechCeilingY?: number;     // World Y of the burrowable ceiling underside
+  mechVulnerable?: boolean;  // True while the cooling dome / cockpit is open
+  overheatFrames?: number;   // 120-frame steam venting window (Chemical Plant boss)
+  floodLevel?: number;       // 0..1 Chemical Flood height inside the arena
+  vortexActive?: boolean;    // Siphon intake turbine currently pulling players inward
+  vortexStrength?: number;   // 0..1 ramp for the siphon pull
+  stunFrames?: number;       // 115-frame wall-crash stun (Drill-Crusher)
+  drillSpinning?: boolean;
+  ceilingBurrow?: boolean;
+  slamLanded?: boolean;      // Ground-slam impact already resolved this phase
 }
 
 export interface BadnikProjectile {

@@ -3,20 +3,26 @@ import { CHARACTER_SPECS } from '../data/presets';
 import {
   ActiveBadnik,
   ActiveBoss,
+  ActiveHazard,
   BadnikProjectile,
   CharacterId,
   ControlInputState,
   DynamicPlatform,
   LevelData,
+  MechBossPhase,
   ParticleFX,
   PlayerEntity,
   ScatteredRing,
   TileType,
+  TubeTravelState,
 } from '../types/engine';
 
 export const TILE_SIZE = 32;
 const PLAYER_HALF_W = 10;
 const PLAYER_HALF_H = 15;
+// Boss tuning constants
+export const OVERHEAT_VENT_FRAMES = 120;   // Chemical Plant boss cooling-dome opening
+export const DRILL_CRASH_STUN_FRAMES = 115; // Mystic Caverns boss wall-crash jam
 
 export function createPlayerEntity(
   id: 1 | 2,
@@ -64,11 +70,13 @@ export function createPlayerEntity(
     animTimer: 0,
     animFrame: 0,
     inLoop: false,
+    tubeTravel: null,
+    tubeCooldown: 0,
     loopCenterX: 0,
     loopCenterY: 0,
-    loopRadius: 72,
     loopAngle: 0,
     loopDir: 1,
+    loopRadius: 74,
     loopCooldown: 0,
     camX: Math.max(0, startX - 240),
     camY: Math.max(0, startY - 180),
@@ -149,6 +157,8 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
         tile === TileType.BOSS_MARBLE ||
         tile === TileType.BOSS_STARLIGHT ||
         tile === TileType.BOSS_HILLTOP ||
+        tile === TileType.BOSS_CHEMICAL ||
+        tile === TileType.BOSS_MYSTIC ||
         tile === TileType.BOSS_SILVER_SONIC ||
         tile === TileType.BOSS_DEATH_EGG_ROBOT
       ) {
@@ -161,6 +171,10 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
             ? 'starlight'
             : tile === TileType.BOSS_HILLTOP
             ? 'hilltop'
+            : tile === TileType.BOSS_CHEMICAL
+            ? 'chemical'
+            : tile === TileType.BOSS_MYSTIC
+            ? 'mystic'
             : tile === TileType.BOSS_SILVER_SONIC
             ? 'silversonic'
             : tile === TileType.BOSS_DEATH_EGG_ROBOT
@@ -168,7 +182,28 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
             : 'eggman';
         const isFinalBoss = bossType === 'deathegg';
         const isSilverSonic = bossType === 'silversonic';
-        const maxHp = isFinalBoss ? 24 : 8;
+        const isMechDuo = bossType === 'chemical' || bossType === 'mystic';
+        const maxHp = isFinalBoss ? 24 : isMechDuo ? 10 : 8;
+
+        // Locate the arena floor: first solid tile straight below the boss post
+        let mechFloorY = py + 3 * TILE_SIZE;
+        for (let fy = y + 1; fy < level.height; fy++) {
+          if (isSolidTile(level.grid[fy][x] as TileType)) {
+            mechFloorY = fy * TILE_SIZE;
+            break;
+          }
+        }
+        // Locate the burrow ceiling: first solid tile straight above the boss post
+        let mechCeilingY = Math.max(0, py - 6 * TILE_SIZE);
+        for (let cy = y - 1; cy >= 0; cy--) {
+          if (isSolidTile(level.grid[cy][x] as TileType)) {
+            mechCeilingY = (cy + 1) * TILE_SIZE;
+            break;
+          }
+        }
+
+        const mechStartPhase: MechBossPhase =
+          bossType === 'chemical' ? 'mech_advance' : 'drill_rev';
         list.push({
           id: `boss_${x}_${y}`,
           bossType,
@@ -201,11 +236,58 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
           targetReticleY: py + 16,
           targetReticleLocked: false,
           armsLaunched: 0,
+          mechPhase: isMechDuo ? mechStartPhase : undefined,
+          mechTimer: 0,
+          mechFloorY,
+          mechCeilingY,
+          mechVulnerable: false,
+          overheatFrames: 0,
+          floodLevel: 0,
+          vortexActive: false,
+          vortexStrength: 0,
+          stunFrames: 0,
+          drillSpinning: false,
+          ceilingBurrow: false,
+          slamLanded: false,
         });
       }
     }
   }
   return list;
+}
+
+// ============================================================================
+// SHARED HAZARD HELPERS (Mystic Caverns Stalactites / Debris / Boss Shockwaves)
+// ============================================================================
+let nextHazardId = 1;
+
+export function spawnHazard(
+  hazards: ActiveHazard[],
+  kind: ActiveHazard['kind'],
+  x: number,
+  y: number,
+  vx: number,
+  vy: number,
+  radius: number,
+  life: number,
+  damaging: boolean,
+  color: string,
+  facing?: 1 | -1
+) {
+  hazards.push({
+    id: nextHazardId++,
+    kind,
+    x,
+    y,
+    vx,
+    vy,
+    radius,
+    life,
+    maxLife: life,
+    damaging,
+    color,
+    facing,
+  });
 }
 
 function getTileAt(grid: number[][], tx: number, ty: number): TileType {
@@ -345,7 +427,26 @@ export function isSolidTile(t: TileType): boolean {
     t === TileType.GIMMICK_CONVEYOR_RIGHT ||
     t === TileType.GIMMICK_CONVEYOR_LEFT ||
     t === TileType.ONE_WAY_DOOR_LOCKED ||
+    t === TileType.SPIKES_DOWN ||
+    t === TileType.GIMMICK_ACID_POOL ||
+    t === TileType.GIMMICK_STEAM_VENT ||
     isCustomBlockTile(t)
+  );
+}
+
+// Spiked surfaces damage on contact (Floor Spikes / Ceiling Spikes)
+export function isSpikeHazardTile(t: TileType): boolean {
+  return t === TileType.SPIKES_UP || t === TileType.SPIKES_DOWN;
+}
+
+// Shielded players (any elemental barrier), Super/Hyper forms & Invincibility
+// are unaffected by boiling chemical pools & chemical floods.
+export function isChemicallyShielded(player: PlayerEntity): boolean {
+  return (
+    player.shield !== 'none' ||
+    player.isSuper ||
+    player.isHyper ||
+    player.invincibleTimer > 0
   );
 }
 
@@ -394,6 +495,9 @@ function getTileSurfaceInfo(
     case TileType.CUSTOM_BLOCK_8:
     case TileType.CUSTOM_BLOCK_9:
     case TileType.CUSTOM_BLOCK_10:
+    case TileType.SPIKES_DOWN:
+    case TileType.GIMMICK_ACID_POOL:
+    case TileType.GIMMICK_STEAM_VENT:
     case TileType.ONE_WAY_DOOR_LOCKED: {
       if (grid && ty > 0 && tile !== TileType.PLATFORM) {
         const aboveTile = getTileAt(grid, tx, ty - 1);
@@ -445,6 +549,8 @@ export interface StepContext {
   allEmeraldsCollected: boolean;
   allSuperEmeraldsCollected?: boolean;
   elapsedMs: number;
+  // Non-projectile mecha boss hazards + Mystic Caverns falling stalactites
+  hazards: ActiveHazard[];
 }
 
 let nextParticleId = 1;
@@ -713,6 +819,159 @@ function killPlayerInVoid(player: PlayerEntity, ctx: StepContext) {
   );
 }
 
+// ============================================================================
+// CHEMICAL PLANT TRAVEL TUBES
+// The player falls into a Tube Intake and is carried through the glass pipe
+// network before being launched out of a Tube Exit nozzle.
+// ============================================================================
+function findTubeExit(
+  ctx: StepContext,
+  entryTx: number,
+  entryTy: number
+): { x: number; y: number; tx: number; ty: number } | null {
+  let best: { x: number; y: number; tx: number; ty: number } | null = null;
+  let bestScore = Infinity;
+  for (let ty = 0; ty < ctx.level.height; ty++) {
+    for (let tx = 0; tx < ctx.level.width; tx++) {
+      if (ctx.grid[ty][tx] !== TileType.GIMMICK_TUBE_EXIT) continue;
+      if (tx === entryTx && ty === entryTy) continue;
+      // Prefer exits to the right & ahead of the intake, then nearest by distance
+      const dx = tx - entryTx;
+      const score = Math.abs(dx) + Math.abs(ty - entryTy) * 1.25 + (dx < 0 ? 200 : 0);
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: tx * TILE_SIZE + 16, y: ty * TILE_SIZE + 16, tx, ty };
+      }
+    }
+  }
+  return best;
+}
+
+function startTubeTravel(
+  player: PlayerEntity,
+  ctx: StepContext,
+  entryTx: number,
+  entryTy: number
+) {
+  const exit = findTubeExit(ctx, entryTx, entryTy);
+  if (!exit) return;
+  const entryCx = entryTx * TILE_SIZE + 16;
+  const entryCy = entryTy * TILE_SIZE + 16;
+  // The horizontal transport channel runs 2 tiles below the intake mouth
+  const channelY = (entryTy + 2) * TILE_SIZE + 16;
+  const dirToExit: 1 | -1 = exit.x >= entryCx ? 1 : -1;
+  const travel: TubeTravelState = {
+    points: [
+      { x: entryCx, y: entryCy },
+      { x: entryCx, y: channelY },
+      { x: exit.x, y: channelY },
+      { x: exit.x, y: exit.y },
+      { x: exit.x, y: exit.y - TILE_SIZE * 0.5 },
+    ],
+    segment: 0,
+    speed: 15.5,
+    exitVx: 7.2 * dirToExit,
+    exitVy: -12.6,
+    entryX: entryCx,
+    entryY: entryCy,
+  };
+  player.tubeTravel = travel;
+  player.tubeCooldown = 40;
+  player.vx = 0;
+  player.vy = 0;
+  player.gsp = 0;
+  player.onGround = false;
+  player.state = 'roll';
+  player.inLoop = false;
+  soundFX.playSpinDashRelease();
+  addParticle(ctx.particles, 'sparkle', entryCx, entryCy, 0, -2, '#38BDF8', 8, 22);
+  addParticle(
+    ctx.particles,
+    'score_popup',
+    entryCx,
+    entryCy - 18,
+    0,
+    -1.1,
+    '#38BDF8',
+    11,
+    34,
+    'TRAVEL TUBE!'
+  );
+}
+
+function updateTubeTravel(player: PlayerEntity, ctx: StepContext): boolean {
+  const travel = player.tubeTravel;
+  if (!travel) return false;
+
+  const target = travel.points[travel.segment + 1];
+  if (!target) {
+    finishTubeTravel(player, ctx);
+    return true;
+  }
+  const dx = target.x - player.x;
+  const dy = target.y - player.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist <= travel.speed) {
+    player.x = target.x;
+    player.y = target.y;
+    travel.segment++;
+    if (travel.segment >= travel.points.length - 1) {
+      finishTubeTravel(player, ctx);
+      return true;
+    }
+  } else {
+    player.x += (dx / dist) * travel.speed;
+    player.y += (dy / dist) * travel.speed;
+  }
+
+  // Glass pipe chemical bubbles trailing behind Sonic
+  if (Math.random() < 0.5) {
+    addParticle(
+      ctx.particles,
+      'sparkle',
+      player.x + (Math.random() - 0.5) * 12,
+      player.y + (Math.random() - 0.5) * 12,
+      -travel.exitVx * 0.25,
+      0.6,
+      Math.random() < 0.5 ? '#7DD3FC' : '#38BDF8',
+      5,
+      16
+    );
+  }
+  return true;
+}
+
+function finishTubeTravel(player: PlayerEntity, ctx: StepContext) {
+  const travel = player.tubeTravel;
+  if (!travel) return;
+  const exitPoint = travel.points[travel.points.length - 1];
+  player.x = exitPoint.x;
+  player.y = exitPoint.y;
+  player.vx = travel.exitVx;
+  player.vy = travel.exitVy;
+  player.gsp = travel.exitVx;
+  player.facing = travel.exitVx >= 0 ? 1 : -1;
+  player.onGround = false;
+  player.inLoop = false;
+  player.state = 'spring';
+  player.tubeTravel = null;
+  player.tubeCooldown = 40;
+  soundFX.playSpring(true);
+  addParticle(ctx.particles, 'pop', player.x, player.y, 0, 0, '#38BDF8', 22, 20);
+  addParticle(
+    ctx.particles,
+    'score_popup',
+    player.x,
+    player.y - 22,
+    0,
+    -1.2,
+    '#7DD3FC',
+    12,
+    40,
+    'TUBE LAUNCH!'
+  );
+}
+
 export function updatePlayerPhysics(
   player: PlayerEntity,
   rawInput: ControlInputState,
@@ -720,6 +979,29 @@ export function updatePlayerPhysics(
   ctx: StepContext
 ) {
   const spec = CHARACTER_SPECS[player.character];
+
+  // Riding a Chemical Plant travel tube: follow the glass pipe route & ignore
+  // normal physics until the tube exit launches the player out!
+  if (player.tubeTravel) {
+    updateTubeTravel(player, ctx);
+    if (player.animTimer % 4 < 2) {
+      addParticle(
+        ctx.particles,
+        'sparkle',
+        player.x + (Math.random() - 0.5) * 14,
+        player.y + (Math.random() - 0.5) * 14,
+        0,
+        -0.8,
+        '#0EA5E9',
+        5,
+        14
+      );
+    }
+    player.animTimer += 1;
+    player.animFrame = Math.floor(player.animTimer / 6) % 8;
+    return;
+  }
+  if (player.tubeCooldown && player.tubeCooldown > 0) player.tubeCooldown--;
 
   // Handle Super Form Ring Drain (1 ring per second) & Golden Aura Particles
   if (player.isSuper) {
@@ -1574,6 +1856,7 @@ export function updatePlayerPhysics(
     player.state = 'jump';
   }
   interactWithProjectiles(player, ctx);
+  interactWithHazards(player, ctx);
 
   // 9. Scattered Ring Pickup
   if (player.hurtTimer < 65) {
@@ -1686,6 +1969,14 @@ function resolveHorizontalCollision(player: PlayerEntity, ctx: StepContext) {
       }
     }
 
+    // Boiling Toxic Blue Chemical Pools: any shield protects the player!
+    if (hitTile === TileType.GIMMICK_ACID_POOL && !isChemicallyShielded(player)) {
+      soundFX.playLavaBurn();
+      addParticle(ctx.particles, 'smoke', player.x, player.y, 0, -2, '#38BDF8', 6, 18);
+      hurtPlayer(player, ctx);
+      return;
+    }
+
     // One-Way Door (unlocked): allows passing forward (dir > 0), blocks going backwards (dir < 0)!
     if (hitTile === TileType.ONE_WAY_DOOR && dir < 0) {
       player.x = (tx + 1) * TILE_SIZE + PLAYER_HALF_W;
@@ -1699,7 +1990,10 @@ function resolveHorizontalCollision(player: PlayerEntity, ctx: StepContext) {
       hitTile === TileType.GROUND_DEEP ||
       hitTile === TileType.BREAKABLE_ROCK ||
       hitTile === TileType.SPIKES_UP ||
+      hitTile === TileType.SPIKES_DOWN ||
       hitTile === TileType.LAVA ||
+      hitTile === TileType.GIMMICK_ACID_POOL ||
+      hitTile === TileType.GIMMICK_STEAM_VENT ||
       hitTile === TileType.GIMMICK_CRUSHER ||
       hitTile === TileType.GIMMICK_LAVA_SHOOTER_LEFT ||
       hitTile === TileType.GIMMICK_LAVA_SHOOTER_RIGHT ||
@@ -1711,7 +2005,7 @@ function resolveHorizontalCollision(player: PlayerEntity, ctx: StepContext) {
       if (
         player.character === 'knuckles' &&
         player.state === 'glide' &&
-        hitTile !== TileType.SPIKES_UP
+        !isSpikeHazardTile(hitTile)
       ) {
         player.state = 'climb';
         player.vx = 0;
@@ -1744,6 +2038,9 @@ function resolveVerticalCollision(player: PlayerEntity, ctx: StepContext) {
       ceilTile === TileType.GROUND_DEEP ||
       ceilTile === TileType.BREAKABLE_ROCK ||
       ceilTile === TileType.SPIKES_UP ||
+      ceilTile === TileType.SPIKES_DOWN ||
+      ceilTile === TileType.GIMMICK_ACID_POOL ||
+      ceilTile === TileType.GIMMICK_STEAM_VENT ||
       ceilTile === TileType.GIMMICK_CRUSHER ||
       ceilTile === TileType.GIMMICK_LAVA_SHOOTER_LEFT ||
       ceilTile === TileType.GIMMICK_LAVA_SHOOTER_RIGHT ||
@@ -1754,6 +2051,22 @@ function resolveVerticalCollision(player: PlayerEntity, ctx: StepContext) {
       player.vy = 0;
       if (ceilTile === TileType.GIMMICK_CRUSHER) {
         hurtPlayer(player, ctx);
+      }
+      // Mystic Caverns Ceiling Spikes: jumping into the stalactite bed hurts!
+      if (ceilTile === TileType.SPIKES_DOWN) {
+        addParticle(
+          ctx.particles,
+          'score_popup',
+          player.x,
+          player.y - 20,
+          0,
+          -1.2,
+          '#EF4444',
+          11,
+          30,
+          'CEILING SPIKES!'
+        );
+        hurtPlayer(player, ctx, true);
       }
       if (!player.onGround) return;
     }
@@ -1798,6 +2111,76 @@ function resolveVerticalCollision(player: PlayerEntity, ctx: StepContext) {
     if (bestSurface.tile === TileType.SPIKES_UP) {
       hurtPlayer(player, ctx, true);
       return;
+    }
+
+    // Mystic Caverns bed spikes / Chemical Plant floor hazards land as spikes too
+    if (bestSurface.tile === TileType.SPIKES_DOWN) {
+      hurtPlayer(player, ctx, true);
+      return;
+    }
+
+    // Chemical Plant Steam Vents: periodic pressure burst launches players skyward!
+    if (bestSurface.tile === TileType.GIMMICK_STEAM_VENT) {
+      const ventCycle = Math.floor(ctx.elapsedMs / 16.67) % 150;
+      if (ventCycle < 55) {
+        player.vy = -12.8;
+        player.gsp = player.vx;
+        player.onGround = false;
+        player.inLoop = false;
+        player.state = 'spring';
+        soundFX.playSpring(true);
+        addParticle(ctx.particles, 'pop', player.x, player.y + 10, 0, 0, '#BAE6FD', 20, 18);
+        for (let s = 0; s < 5; s++) {
+          addParticle(
+            ctx.particles,
+            'smoke',
+            player.x + (Math.random() - 0.5) * 20,
+            player.y + 14,
+            (Math.random() - 0.5) * 2.4,
+            -3.4 - Math.random() * 2,
+            '#E0F2FE',
+            7,
+            22
+          );
+        }
+        return;
+      }
+    }
+
+    // Boiling Toxic Blue Chemical Pools (any shield blocks the damage)
+    if (bestSurface.tile === TileType.GIMMICK_ACID_POOL) {
+      if (isChemicallyShielded(player)) {
+        if (Math.abs(player.vx) > 0.5 && Math.random() < 0.35) {
+          addParticle(
+            ctx.particles,
+            'sparkle',
+            player.x + (Math.random() - 0.5) * 16,
+            player.y + 14,
+            -player.vx * 0.25,
+            -1.5 - Math.random(),
+            '#38BDF8',
+            5,
+            16
+          );
+        }
+      } else {
+        soundFX.playLavaBurn();
+        for (let e = 0; e < 5; e++) {
+          addParticle(
+            ctx.particles,
+            'smoke',
+            player.x + (Math.random() - 0.5) * 18,
+            player.y + 12,
+            (Math.random() - 0.5) * 3,
+            -2 - Math.random() * 2,
+            '#0EA5E9',
+            6,
+            20
+          );
+        }
+        hurtPlayer(player, ctx);
+        return;
+      }
     }
 
     // Neo Starlight Conveyor Belt Gimmick pushes grounded player!
@@ -2497,6 +2880,67 @@ function collectNearbyTiles(player: PlayerEntity, ctx: StepContext) {
           }
           break;
         }
+        case TileType.GIMMICK_TUBE_ENTRY: {
+          // Chemical Plant Travel Tube: fall into the intake & ride the pipe network!
+          if (!player.tubeTravel && (player.tubeCooldown || 0) <= 0) {
+            startTubeTravel(player, ctx, tx, ty);
+          }
+          break;
+        }
+        case TileType.GIMMICK_STEAM_VENT: {
+          // Chemical Plant Steam Vent: riders above the grate get blasted upward!
+          const ventTick = Math.floor(ctx.elapsedMs / 16.67) % 150;
+          if (ventTick < 55 && player.y < tileCenterY) {
+            player.vy = Math.max(-9.4, player.vy - 1.6);
+            player.onGround = false;
+            if (Math.random() < 0.3) {
+              addParticle(
+                ctx.particles,
+                'sparkle',
+                tileCenterX + (Math.random() - 0.5) * 20,
+                tileCenterY - 12,
+                0,
+                -3.4,
+                '#E0F2FE',
+                5,
+                18
+              );
+            }
+          }
+          break;
+        }
+        case TileType.SPIKES_DOWN: {
+          // Ceiling Spikes: brush against the stalactite bed and take a hit
+          if (
+            Math.abs(player.x - tileCenterX) < 20 &&
+            Math.abs(player.y - tileCenterY) < 22
+          ) {
+            hurtPlayer(player, ctx, true);
+          }
+          break;
+        }
+        case TileType.GIMMICK_ACID_POOL: {
+          // Boiling Toxic Blue Chemical Pool: only shielded players swim safely
+          if (
+            Math.abs(player.x - tileCenterX) < 22 &&
+            Math.abs(player.y - tileCenterY) < 22 &&
+            !isChemicallyShielded(player)
+          ) {
+            soundFX.playLavaBurn();
+            hurtPlayer(player, ctx);
+          }
+          break;
+        }
+        case TileType.GIMMICK_STALACTITE: {
+          // Hanging rock stalactite brush = spike hit (before it even drops!)
+          if (
+            Math.abs(player.x - tileCenterX) < 20 &&
+            Math.abs(player.y - tileCenterY) < 22
+          ) {
+            hurtPlayer(player, ctx, true);
+          }
+          break;
+        }
         case TileType.GIMMICK_TELEPORT_ORB: {
           // Hill Top Peaks High-Altitude Cloud Cannon!
           player.vx = 12.2 * player.facing;
@@ -2665,6 +3109,86 @@ function interactWithBadniks(player: PlayerEntity, ctx: StepContext) {
         hurtPlayer(player, ctx);
       }
     }
+  }
+}
+
+// Applies a hit to one of the new non-projectile mecha bosses, handles player
+// rebound, spark particles, defeat explosion & score popups.
+function damageMechBoss(
+  boss: ActiveBoss,
+  player: PlayerEntity,
+  ctx: StepContext,
+  hitX: number,
+  hitY: number,
+  label: string
+) {
+  if (boss.invulnTimer > 0) return;
+  const hitDamage = player.isHyper ? 2 : 1;
+  boss.hp = Math.max(0, boss.hp - hitDamage);
+  boss.invulnTimer = 34;
+  soundFX.playBossHit();
+
+  // Rebound the player up & away from the mech chassis
+  player.vy = player.y < boss.y ? -7.0 : -5.2;
+  player.vx = (player.x < boss.x ? -1 : 1) * 5.6;
+  player.gsp = player.vx;
+  player.onGround = false;
+
+  addParticle(ctx.particles, 'pop', hitX, hitY, 0, 0, '#F97316', 26, 20);
+  addParticle(
+    ctx.particles,
+    'score_popup',
+    hitX,
+    hitY - 26,
+    0,
+    -1.2,
+    player.isHyper ? '#38BDF8' : '#22C55E',
+    12,
+    34,
+    player.isHyper ? `${label} 2X!` : label
+  );
+
+  if (boss.hp <= 0) {
+    boss.alive = false;
+    boss.engaged = false;
+    boss.vortexActive = false;
+    boss.mechVulnerable = false;
+    boss.overheatFrames = 0;
+    boss.floodLevel = 0;
+    boss.ceilingBurrow = false;
+    player.score += 5000;
+    soundFX.playGoalPost();
+    // Clear out all mech-made hazards (shockwaves, debris, steam) on defeat
+    for (let i = ctx.hazards.length - 1; i >= 0; i--) {
+      if (ctx.hazards[i].kind !== 'stalactite') ctx.hazards.splice(i, 1);
+    }
+    for (let k = 0; k < 22; k++) {
+      addParticle(
+        ctx.particles,
+        'pop',
+        boss.x + (Math.random() - 0.5) * 130,
+        boss.y + (Math.random() - 0.5) * 110,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+        k % 2 === 0 ? '#FACC15' : '#38BDF8',
+        28,
+        38
+      );
+    }
+    addParticle(
+      ctx.particles,
+      'score_popup',
+      boss.x,
+      boss.y - 32,
+      0,
+      -1.2,
+      '#FACC15',
+      14,
+      70,
+      boss.bossType === 'chemical'
+        ? 'SLIME-CRUSHER MECH DESTROYED +5000!'
+        : 'EGG DRILL-CRUSHER DESTROYED +5000!'
+    );
   }
 }
 
@@ -3009,6 +3533,259 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
         }
       }
       continue;
+    } else if (boss.bossType === 'chemical') {
+      // =====================================================================
+      // CHEMICAL PLANT ACT 2 BOSS: HYDRAULIC SLIME-CRUSHER & SIPHON MECH
+      // Non-projectile mech. Its armored hull deflects attacks at all times
+      // EXCEPT during the 120-frame overheat venting window when the cooling
+      // dome pops open and the cockpit core is exposed!
+      // =====================================================================
+      const floorY = boss.mechFloorY ?? boss.startY + 96;
+
+      // 1) Chemical Flood: players caught under the bubbling surface are hurt
+      //    unless they are shielded → climb the high catwalks!
+      const flood = boss.floodLevel || 0;
+      if (flood > 0.02) {
+        const surfaceY = floorY - flood * TILE_SIZE * 3;
+        const inArena =
+          player.x >= boss.arenaLeft - 20 && player.x <= boss.arenaRight + 20;
+        if (
+          inArena &&
+          player.y + PLAYER_HALF_H > surfaceY &&
+          !isChemicallyShielded(player)
+        ) {
+          soundFX.playLavaBurn();
+          addParticle(ctx.particles, 'smoke', player.x, player.y + 10, 0, -2, '#38BDF8', 7, 20);
+          hurtPlayer(player, ctx);
+          continue;
+        }
+      }
+
+      // 2) Siphon Vortex intake turbine rotor: spiked fan blades hurt on contact
+      if (
+        boss.vortexActive &&
+        !player.isSuper &&
+        player.invincibleTimer === 0 &&
+        Math.hypot(player.x - boss.x, player.y - (boss.startY + 26)) < 20
+      ) {
+        addParticle(
+          ctx.particles,
+          'score_popup',
+          boss.x,
+          boss.y + 6,
+          0,
+          -1.2,
+          '#EF4444',
+          11,
+          30,
+          'SIPHON BLADES!'
+        );
+        hurtPlayer(player, ctx, true);
+        continue;
+      }
+
+      // 3) Hydraulic piston feet are always hazardous from the sides
+      if (!player.isSuper && player.invincibleTimer === 0) {
+        let stomped = false;
+        for (const side of [-18, 18]) {
+          const footX = boss.x + side;
+          const footY = floorY - 16;
+          if (Math.hypot(player.x - footX, player.y - footY) < 22) {
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              footX,
+              footY - 24,
+              0,
+              -1.2,
+              '#EF4444',
+              11,
+              30,
+              'PISTON STOMP!'
+            );
+            hurtPlayer(player, ctx);
+            stomped = true;
+            break;
+          }
+        }
+        if (stomped) continue;
+      }
+
+      // 4) Cooling dome weak point (open only while overheated for 120 frames)
+      const domeX = boss.x;
+      const domeY = boss.y - 28;
+      if (Math.hypot(player.x - domeX, player.y - domeY) < 32) {
+        if (isAttacking) {
+          if (boss.mechVulnerable) {
+            damageMechBoss(boss, player, ctx, domeX, domeY, 'COOLING DOME WEAK POINT!');
+          } else {
+            // Armored dome deflects the attack — wait for the overheat venting!
+            player.vx = (player.x < boss.x ? -1 : 1) * 7.4;
+            player.gsp = player.vx;
+            player.vy = -6.0;
+            player.onGround = false;
+            soundFX.playSpring(false);
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              domeX,
+              domeY - 26,
+              0,
+              -1.1,
+              '#94A3B8',
+              11,
+              34,
+              'ARMORED! WAIT FOR OVERHEAT!'
+            );
+          }
+        } else {
+          hurtPlayer(player, ctx);
+        }
+        continue;
+      }
+
+      // 5) Armored lower hull & vat body
+      if (Math.hypot(player.x - boss.x, player.y - boss.y) < 36) {
+        if (isAttacking) {
+          player.vx = -boss.facing * 6.6;
+          player.gsp = player.vx;
+          player.vy = -5.4;
+          soundFX.playSpring(false);
+          addParticle(
+            ctx.particles,
+            'score_popup',
+            boss.x,
+            boss.y - 24,
+            0,
+            -1.1,
+            '#94A3B8',
+            11,
+            32,
+            'HULL DEFLECT!'
+          );
+        } else {
+          hurtPlayer(player, ctx);
+        }
+        continue;
+      }
+      continue;
+    } else if (boss.bossType === 'mystic') {
+      // =====================================================================
+      // MYSTIC CAVERNS ACT 2 BOSS: EGG DRILL-CRUSHER
+      // Non-projectile mech. The rotating conical drill bit deflects head-on
+      // attacks — the cockpit core only opens during the 115-frame
+      // wall-crash stun after it buries itself into a reinforced cavern wall!
+      // =====================================================================
+      const phase = boss.mechPhase || 'drill_rev';
+      const isBurrowing =
+        phase === 'ceiling_burrow' || boss.ceilingBurrow || boss.y < boss.startY - 70;
+      if (isBurrowing) continue; // Safely out of reach while inside the ceiling
+
+      const isCharging = phase === 'drill_charge';
+      const stunned = phase === 'wall_crash_stun' && (boss.stunFrames || 0) > 0;
+
+      // 1) Rotating conical drill bit: hurts on contact & deflects head-on attacks
+      const drillTipX = boss.x + boss.facing * 36;
+      const drillTipY = boss.y + 8;
+      if (
+        Math.hypot(player.x - drillTipX, player.y - drillTipY) < 26 &&
+        !player.isSuper &&
+        player.invincibleTimer === 0
+      ) {
+        if (isAttacking) {
+          // Head-on attacks are deflected by the spinning drill!
+          player.vx = -boss.facing * 9.2;
+          player.gsp = player.vx;
+          player.vy = -6.4;
+          player.onGround = false;
+          soundFX.playSpring(false);
+          addParticle(
+            ctx.particles,
+            'score_popup',
+            drillTipX,
+            drillTipY - 26,
+            0,
+            -1.2,
+            '#22D3EE',
+            12,
+            34,
+            'DRILL DEFLECTS ATTACK!'
+          );
+        } else {
+          addParticle(
+            ctx.particles,
+            'score_popup',
+            drillTipX,
+            drillTipY - 22,
+            0,
+            -1.2,
+            '#EF4444',
+            11,
+            30,
+            isCharging ? 'DRILL CHARGE!' : 'DRILL SPIKE!'
+          );
+          hurtPlayer(player, ctx, true);
+        }
+        continue;
+      }
+
+      // 2) Cockpit weak point (jammed engine opens it during the 115-frame stun)
+      const cockpitX = boss.x;
+      const cockpitY = boss.y - 26;
+      if (Math.hypot(player.x - cockpitX, player.y - cockpitY) < 32) {
+        if (isAttacking) {
+          if (stunned) {
+            damageMechBoss(boss, player, ctx, cockpitX, cockpitY, 'JAMMED COCKPIT HIT!');
+          } else {
+            player.vx = -boss.facing * 7.8;
+            player.gsp = player.vx;
+            player.vy = -6.0;
+            player.onGround = false;
+            soundFX.playSpring(false);
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              cockpitX,
+              cockpitY - 26,
+              0,
+              -1.1,
+              '#C084FC',
+              11,
+              34,
+              'ARMORED! SLAM IT INTO A WALL!'
+            );
+          }
+        } else {
+          hurtPlayer(player, ctx);
+        }
+        continue;
+      }
+
+      // 3) Armored tread hull contact
+      if (Math.hypot(player.x - boss.x, player.y - boss.y) < 36) {
+        if (isAttacking) {
+          player.vx = -boss.facing * 6.8;
+          player.gsp = player.vx;
+          player.vy = -5.6;
+          soundFX.playSpring(false);
+          addParticle(
+            ctx.particles,
+            'score_popup',
+            boss.x,
+            boss.y - 24,
+            0,
+            -1.1,
+            '#C084FC',
+            11,
+            32,
+            'HULL DEFLECT!'
+          );
+        } else {
+          hurtPlayer(player, ctx);
+        }
+        continue;
+      }
+      continue;
     } else if (boss.bossType === 'marble') {
       // Unique Marble Zone Boss: Underslung Molten Magma Furnace Nozzle
       const nozzleX = boss.x;
@@ -3125,6 +3902,63 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
       } else {
         hurtPlayer(player, ctx);
       }
+    }
+  }
+}
+
+function interactWithHazards(player: PlayerEntity, ctx: StepContext) {
+  for (const hz of ctx.hazards) {
+    // Venting steam is a harmless force — it shoves players away from the mech
+    if (hz.kind === 'steam' || hz.kind === 'steam_burst') {
+      const dist = Math.hypot(player.x - hz.x, player.y - hz.y);
+      if (dist < hz.radius + 24) {
+        const push = hz.kind === 'steam_burst' ? 1.7 : 0.9;
+        player.vy = Math.max(-9.2, player.vy - push);
+        player.onGround = false;
+      }
+      continue;
+    }
+
+    if (!hz.damaging) continue;
+
+    if (hz.kind === 'shockwave') {
+      // Ground-hugging shockwave: only grounded players standing in its path
+      const footY = player.y + PLAYER_HALF_H;
+      const sameLevel = Math.abs(footY - (hz.y + 10)) < 30;
+      if (sameLevel && player.onGround && Math.abs(player.x - hz.x) < hz.radius + 12) {
+        addParticle(
+          ctx.particles,
+          'score_popup',
+          player.x,
+          player.y - 22,
+          0,
+          -1.2,
+          '#EF4444',
+          11,
+          30,
+          'SHOCKWAVE!'
+        );
+        hurtPlayer(player, ctx, true);
+      }
+      continue;
+    }
+
+    // Falling stalactites & rock debris behave like spiked hazards
+    const dist = Math.hypot(player.x - hz.x, player.y - hz.y);
+    if (dist < hz.radius + 13) {
+      addParticle(
+        ctx.particles,
+        'score_popup',
+        hz.x,
+        hz.y - 18,
+        0,
+        -1.2,
+        '#EF4444',
+        11,
+        30,
+        hz.kind === 'debris' ? 'ROCK DEBRIS!' : 'STALACTITE!'
+      );
+      hurtPlayer(player, ctx, true);
     }
   }
 }
@@ -3442,6 +4276,123 @@ export function updateWorldEntities(ctx: StepContext) {
     }
   }
 
+  // ===========================================================================
+  // MYSTIC CAVERNS FALLING STALACTITES
+  // Hanging rock stalactites detach the moment a player runs underneath them!
+  // ===========================================================================
+  for (const p of ctx.players) {
+    const pTx = Math.floor(p.x / TILE_SIZE);
+    const pTy = Math.floor(p.y / TILE_SIZE);
+    for (let ty = Math.max(1, pTy - 14); ty <= Math.max(1, pTy - 2); ty++) {
+      for (
+        let tx = Math.max(0, pTx - 1);
+        tx <= Math.min(ctx.level.width - 1, pTx + 1);
+        tx++
+      ) {
+        if (ctx.grid[ty][tx] !== TileType.GIMMICK_STALACTITE) continue;
+        // Only stalactites anchored to a solid cavern ceiling (or a rock stem
+        // reaching up to it) can break loose and drop.
+        let anchored = false;
+        for (let d = 1; d <= 4; d++) {
+          if (isSolidTile(getTileAt(ctx.grid, tx, ty - d))) {
+            anchored = true;
+            break;
+          }
+        }
+        if (!anchored) continue;
+        ctx.grid[ty][tx] = TileType.EMPTY;
+        spawnHazard(
+          ctx.hazards,
+          'stalactite',
+          tx * TILE_SIZE + 16,
+          ty * TILE_SIZE + 16,
+          (Math.random() - 0.5) * 0.7,
+          2.3,
+          9,
+          260,
+          true,
+          '#A855F7'
+        );
+        addParticle(ctx.particles, 'pop', tx * TILE_SIZE + 16, ty * TILE_SIZE + 12, 0, 0, '#E9D5FF', 12, 14);
+        soundFX.playPop();
+      }
+    }
+  }
+
+  // ===========================================================================
+  // HAZARD UPDATES (stalactites, rock debris, boss shockwaves, steam jets)
+  // ===========================================================================
+  for (let i = ctx.hazards.length - 1; i >= 0; i--) {
+    const hz = ctx.hazards[i];
+    hz.life--;
+
+    if (hz.kind === 'stalactite' || hz.kind === 'debris') {
+      hz.vy += hz.kind === 'debris' ? 0.34 : 0.2;
+      hz.x += hz.vx;
+      hz.y += hz.vy;
+      const tx = Math.floor(hz.x / TILE_SIZE);
+      const ty = Math.floor((hz.y + hz.radius) / TILE_SIZE);
+      const hitTile = getTileAt(ctx.grid, tx, ty);
+      if (isSolidTile(hitTile) || hitTile === TileType.PLATFORM) {
+        // Shatter into rocky debris on impact!
+        for (let d = 0; d < 8; d++) {
+          addParticle(
+            ctx.particles,
+            'brick_debris',
+            hz.x,
+            hz.y,
+            (Math.random() - 0.5) * 6,
+            -2 - Math.random() * 4,
+            d % 2 === 0 ? '#7E22CE' : '#C084FC',
+            6,
+            22
+          );
+        }
+        soundFX.playPop();
+        ctx.hazards.splice(i, 1);
+        continue;
+      }
+      if (hz.life <= 0 || hz.y > ctx.level.height * TILE_SIZE + 40) {
+        ctx.hazards.splice(i, 1);
+        continue;
+      }
+      continue;
+    }
+
+    if (hz.kind === 'shockwave') {
+      hz.x += hz.vx;
+      if (hz.life <= 0) {
+        ctx.hazards.splice(i, 1);
+        continue;
+      }
+      if (hz.life % 4 === 0 && Math.random() < 0.6) {
+        addParticle(
+          ctx.particles,
+          'sparkle',
+          hz.x,
+          hz.y + 6,
+          hz.vx * 0.2,
+          -1.4,
+          '#FACC15',
+          6,
+          16
+        );
+      }
+      continue;
+    }
+
+    // Steam jets venting from the overheated cooling dome
+    if (hz.kind === 'steam' || hz.kind === 'steam_burst') {
+      hz.y -= 1.4;
+      hz.x += hz.vx;
+      if (hz.life <= 0) {
+        ctx.hazards.splice(i, 1);
+        continue;
+      }
+      continue;
+    }
+  }
+
   // Update Dr. Eggman Bosses
   for (const boss of ctx.bosses) {
     if (!boss.alive) continue;
@@ -3644,6 +4595,537 @@ export function updateWorldEntities(ctx: StepContext) {
             radius: 8,
             life: 100,
           });
+        }
+      }
+    } else if (boss.bossType === 'chemical') {
+      // =====================================================================
+      // HYDRAULIC SLIME-CRUSHER & SIPHON MECH (Chemical Plant Act 2 Boss)
+      // Attacks: Piston Stomp Slam · Chemical Flood · Slime Siphon Vortex ·
+      // 120-Frame Overheat Venting (primary attack opening). No projectiles!
+      // =====================================================================
+      const target = ctx.players[0];
+      const floorY = boss.mechFloorY ?? boss.startY + 96;
+      const leftBound = boss.arenaLeft + 56;
+      const rightBound = boss.arenaRight - 56;
+      boss.mechTimer = (boss.mechTimer || 0) + 1;
+      const mt = boss.mechTimer;
+      const mechPhase = boss.mechPhase || 'mech_advance';
+
+      if (!boss.engaged) {
+        // Parked above the vats until a player steps into the siphon arena
+        boss.x = boss.startX;
+        boss.y = boss.startY + Math.sin(mt * 0.05) * 8;
+        boss.floodLevel = 0;
+        boss.vortexActive = false;
+        boss.overheatFrames = 0;
+        boss.mechVulnerable = false;
+        continue;
+      }
+
+      // Overheat venting timer (120 frames of exposed cooling dome)
+      if (boss.overheatFrames && boss.overheatFrames > 0) {
+        boss.overheatFrames--;
+        if (boss.overheatFrames === 0) {
+          boss.mechVulnerable = false;
+          addParticle(
+            ctx.particles,
+            'score_popup',
+            boss.x,
+            boss.y - 44,
+            0,
+            -1.1,
+            '#FACC15',
+            12,
+            42,
+            'COOLING DOME SEALED!'
+          );
+        }
+      } else {
+        boss.mechVulnerable = false;
+      }
+
+      switch (mechPhase) {
+        case 'mech_advance': {
+          // Hydraulic legs carry the mech toward the player's side of the arena
+          const spd = boss.hp <= 5 ? 2.0 : 1.45;
+          if (target) boss.facing = (target.x >= boss.x ? 1 : -1) as 1 | -1;
+          boss.x = Math.max(leftBound, Math.min(rightBound, boss.x + boss.facing * spd));
+          boss.y = boss.startY + Math.abs(Math.sin(mt * 0.12)) * 4;
+          boss.vortexActive = false;
+          boss.floodLevel = Math.max(0, (boss.floodLevel || 0) - 0.02);
+          if (mt % 22 === 0) {
+            addParticle(
+              ctx.particles,
+              'smoke',
+              boss.x + boss.facing * 20,
+              floorY - 6,
+              -boss.facing * 1.6,
+              -0.8,
+              '#94A3B8',
+              7,
+              16
+            );
+          }
+          if (mt >= 70) {
+            boss.mechPhase = 'piston_stomp';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+
+        case 'piston_stomp': {
+          // PISTON STOMP SLAM: wind up on both hydraulic feet, then slam the
+          // floor hard enough to send shockwaves racing out in both directions!
+          if (mt < 24) {
+            boss.y = boss.startY - mt * 1.15;
+          } else if (mt < 36) {
+            boss.y = boss.startY - 26 + (mt - 24) * 6.4;
+          } else {
+            boss.y = boss.startY;
+            if (mt === 36) {
+              soundFX.playLavaBurn();
+              const waveY = floorY - 12;
+              spawnHazard(ctx.hazards, 'shockwave', boss.x - 26, waveY, -6.6, 0, 22, 64, true, '#FACC15', -1);
+              spawnHazard(ctx.hazards, 'shockwave', boss.x + 26, waveY, 6.6, 0, 22, 64, true, '#FACC15', 1);
+              for (let d = 0; d < 14; d++) {
+                addParticle(
+                  ctx.particles,
+                  'brick_debris',
+                  boss.x + (Math.random() - 0.5) * 76,
+                  floorY - 6,
+                  (Math.random() - 0.5) * 7,
+                  -2.4 - Math.random() * 3.6,
+                  d % 2 === 0 ? '#94A3B8' : '#38BDF8',
+                  6,
+                  24
+                );
+              }
+            }
+          }
+          if (boss.y > boss.startY) boss.y = boss.startY;
+          if (mt >= 74) {
+            boss.mechPhase = 'chemical_flood';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+
+        case 'chemical_flood': {
+          // CHEMICAL FLOOD: open the vat valves — bubbling blue chemicals rise
+          // over the arena floor & force everyone onto the high catwalks!
+          if (mt === 1) {
+            soundFX.playSpinDashRev(5);
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              boss.x,
+              boss.y - 46,
+              0,
+              -1.0,
+              '#38BDF8',
+              13,
+              55,
+              'CHEMICAL FLOOD! GET TO THE CATWALKS!'
+            );
+          }
+          if (mt < 96) boss.floodLevel = Math.min(1, (boss.floodLevel || 0) + 0.0108);
+          boss.y = boss.startY + Math.sin(mt * 0.1) * 6;
+          boss.vortexActive = false;
+          if (mt % 9 === 0 && (boss.floodLevel || 0) > 0.05) {
+            const surfaceY = floorY - (boss.floodLevel || 0) * TILE_SIZE * 3;
+            for (let b = 0; b < 4; b++) {
+              addParticle(
+                ctx.particles,
+                'sparkle',
+                boss.arenaLeft + Math.random() * (boss.arenaRight - boss.arenaLeft),
+                surfaceY,
+                0,
+                -1.6 - Math.random() * 1.6,
+                b % 2 === 0 ? '#7DD3FC' : '#38BDF8',
+                6,
+                22
+              );
+            }
+          }
+          if (mt >= 150) {
+            boss.mechPhase = 'siphon_vortex';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+
+        case 'siphon_vortex': {
+          // SLIME SIPHON VORTEX: the intake turbine spools up to high speed and
+          // drags players inward against their own momentum!
+          if (mt === 1) {
+            soundFX.playSpinDashRev(6);
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              boss.x,
+              boss.y - 46,
+              0,
+              -1.0,
+              '#38BDF8',
+              13,
+              55,
+              'SIPHON VORTEX — RUN AGAINST THE PULL!'
+            );
+          }
+          boss.vortexActive = true;
+          boss.vortexStrength = Math.min(1, mt / 30);
+          boss.y = boss.startY + 6;
+          boss.floodLevel = Math.max(0, (boss.floodLevel || 0) - 0.006);
+          for (const p of ctx.players) {
+            const dx = boss.x - p.x;
+            const dy = boss.startY + 26 - p.y;
+            const d = Math.max(48, Math.hypot(dx, dy));
+            if (d < 470) {
+              const strength = (boss.vortexStrength || 0) * (1 - (d / 470) * 0.35);
+              p.vx += (dx / d) * 0.78 * strength;
+              p.gsp += (dx / d) * 0.55 * strength;
+              p.vy += (dy / d) * 0.5 * strength;
+              if (d > 60) p.onGround = false;
+            }
+          }
+          if (mt % 3 === 0) {
+            const ang = mt * 0.44;
+            addParticle(
+              ctx.particles,
+              'sparkle',
+              boss.x + Math.cos(ang) * 56,
+              boss.startY + 26 + Math.sin(ang) * 56,
+              -Math.sin(ang) * 3.4,
+              Math.cos(ang) * 3.4,
+              '#38BDF8',
+              6,
+              16
+            );
+            addParticle(
+              ctx.particles,
+              'sparkle',
+              boss.x - Math.cos(ang) * 40,
+              boss.startY + 26 - Math.sin(ang) * 40,
+              Math.sin(ang) * 2.6,
+              -Math.cos(ang) * 2.6,
+              '#7DD3FC',
+              5,
+              14
+            );
+          }
+          if (mt >= 120) {
+            boss.vortexActive = false;
+            boss.vortexStrength = 0;
+            boss.mechPhase = 'overheat_venting';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+
+        case 'overheat_venting': {
+          // OVERHEAT VENTING: cooling dome pops open and steam jets vent for a
+          // full 120 frames — the ONLY window where the cockpit core is exposed!
+          if (mt === 1) {
+            boss.overheatFrames = OVERHEAT_VENT_FRAMES;
+            boss.mechVulnerable = true;
+            soundFX.playBossHit();
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              boss.x,
+              boss.y - 56,
+              0,
+              -1.0,
+              '#FACC15',
+              13,
+              62,
+              'OVERHEAT! DOME OPEN — ATTACK NOW!'
+            );
+          }
+          boss.y = boss.startY - 8 + Math.sin(mt * 0.2) * 3;
+          boss.floodLevel = Math.max(0, (boss.floodLevel || 0) - 0.012);
+          if (mt % 6 === 0) {
+            // Steam jets push players back — no damage, this is the safe opening!
+            spawnHazard(ctx.hazards, 'steam_burst', boss.x - 16, boss.y - 32, -0.7, -3.2, 16, 46, false, '#E0F2FE');
+            spawnHazard(ctx.hazards, 'steam_burst', boss.x + 16, boss.y - 32, 0.7, -3.2, 16, 46, false, '#E0F2FE');
+          }
+          if (mt % 5 === 0) {
+            addParticle(
+              ctx.particles,
+              'smoke',
+              boss.x + (Math.random() - 0.5) * 30,
+              boss.y - 30,
+              (Math.random() - 0.5) * 2.4,
+              -3.6,
+              '#E0F2FE',
+              9,
+              22
+            );
+          }
+          if (mt >= OVERHEAT_VENT_FRAMES + 10) {
+            boss.mechVulnerable = false;
+            boss.overheatFrames = 0;
+            boss.mechPhase = boss.hp <= 5 ? 'piston_stomp' : 'mech_advance';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+      }
+    } else if (boss.bossType === 'mystic') {
+      // =====================================================================
+      // EGG DRILL-CRUSHER (Mystic Caverns Act 2 Boss)
+      // Attacks: Drill Charge (head-on deflections) · Wall-Crash Stun (115
+      // frames) · Ceiling Burrow Tremors (falling debris) · Ground Slam. No projectiles!
+      // =====================================================================
+      const target = ctx.players[0];
+      const floorY = boss.mechFloorY ?? boss.startY + 96;
+      const ceilingY = boss.mechCeilingY ?? boss.startY - 160;
+      const leftBound = boss.arenaLeft + 64;
+      const rightBound = boss.arenaRight - 64;
+      const hoverY = floorY - 46; // Closest chassis height to the cavern floor
+      boss.mechTimer = (boss.mechTimer || 0) + 1;
+      const mt = boss.mechTimer;
+      const mechPhase = boss.mechPhase || 'drill_rev';
+
+      if (!boss.engaged) {
+        boss.x = boss.startX;
+        boss.y = boss.startY + Math.sin(mt * 0.06) * 6;
+        boss.drillSpinning = true;
+        boss.ceilingBurrow = false;
+        continue;
+      }
+
+      if (boss.stunFrames && boss.stunFrames > 0) boss.stunFrames--;
+
+      switch (mechPhase) {
+        case 'drill_rev': {
+          // Rev the conical drill & lock onto the player's side of the arena
+          boss.drillSpinning = true;
+          boss.slamLanded = false;
+          boss.y = hoverY + Math.sin(mt * 0.12) * 4;
+          if (target) boss.facing = (target.x >= boss.x ? 1 : -1) as 1 | -1;
+          if (mt % 5 === 0) {
+            addParticle(
+              ctx.particles,
+              'sparkle',
+              boss.x + boss.facing * 38,
+              boss.y + 8,
+              boss.facing * 2.4,
+              -0.6,
+              '#22D3EE',
+              5,
+              14
+            );
+          }
+          if (mt >= 46) {
+            boss.mechPhase = 'drill_charge';
+            boss.mechTimer = 0;
+            soundFX.playSpinDashRev(6);
+          }
+          break;
+        }
+
+        case 'drill_charge': {
+          // DRILL CHARGE: accelerate across the cavern floor — the spinning
+          // conical drill bit deflects any head-on attack!
+          const spd = (boss.hp <= 5 ? 9.6 : 8.2) + Math.min(2.2, mt * 0.09);
+          boss.x += boss.facing * spd;
+          boss.y = hoverY + Math.abs(Math.sin(mt * 0.35)) * 3;
+          boss.drillSpinning = true;
+          boss.ballSwingAngle += 0.62;
+          if (mt % 3 === 0) {
+            addParticle(
+              ctx.particles,
+              'smoke',
+              boss.x - boss.facing * 30,
+              floorY - 10,
+              -boss.facing * 2.6,
+              -0.9,
+              '#7E22CE',
+              7,
+              16
+            );
+          }
+          const hitWall = boss.x <= leftBound || boss.x >= rightBound;
+          if (hitWall) {
+            boss.x = Math.max(leftBound, Math.min(rightBound, boss.x));
+            // WALL-CRASH STUN: engine stalls & the drill jams for 115 frames!
+            boss.mechPhase = 'wall_crash_stun';
+            boss.mechTimer = 0;
+            boss.stunFrames = DRILL_CRASH_STUN_FRAMES;
+            boss.drillSpinning = false;
+            boss.vx = 0;
+            soundFX.playLavaBurn();
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              boss.x,
+              boss.y - 50,
+              0,
+              -1.0,
+              '#FACC15',
+              13,
+              70,
+              'WALL CRASH! DRILL JAMMED 115 FRAMES!'
+            );
+            for (let d = 0; d < 18; d++) {
+              addParticle(
+                ctx.particles,
+                'brick_debris',
+                boss.x + boss.facing * 30 + (Math.random() - 0.5) * 30,
+                boss.y + (Math.random() - 0.5) * 60,
+                -boss.facing * (2 + Math.random() * 5),
+                -2 - Math.random() * 4,
+                d % 2 === 0 ? '#7E22CE' : '#C084FC',
+                7,
+                26
+              );
+            }
+          } else if (mt >= 110) {
+            boss.mechPhase = 'ceiling_burrow';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+
+        case 'wall_crash_stun': {
+          // WALL-CRASH STUN: engine stalled, drill jammed & cockpit wide open!
+          boss.y = hoverY + 2;
+          boss.drillSpinning = false;
+          if (mt % 8 === 0) {
+            addParticle(
+              ctx.particles,
+              'sparkle',
+              boss.x + boss.facing * 34,
+              boss.y + 10,
+              (Math.random() - 0.5) * 3,
+              -1.2,
+              '#22D3EE',
+              6,
+              16
+            );
+          }
+          if (mt % 14 === 0) {
+            addParticle(
+              ctx.particles,
+              'smoke',
+              boss.x - boss.facing * 20,
+              boss.y - 20,
+              (Math.random() - 0.5) * 1.6,
+              -2.2,
+              '#C084FC',
+              8,
+              20
+            );
+          }
+          if (mt >= DRILL_CRASH_STUN_FRAMES) {
+            boss.mechPhase = 'ceiling_burrow';
+            boss.mechTimer = 0;
+          }
+          break;
+        }
+
+        case 'ceiling_burrow': {
+          // CEILING BURROW & TREMORS: drill up into the rock; tremors dislodge
+          // falling rock debris across the arena!
+          if (mt === 1) {
+            boss.ceilingBurrow = true;
+            soundFX.playSpinDashRev(4);
+            addParticle(
+              ctx.particles,
+              'score_popup',
+              boss.x,
+              boss.y - 46,
+              0,
+              -1.0,
+              '#C084FC',
+              13,
+              58,
+              'CEILING BURROW — DEBRIS INCOMING!'
+            );
+          }
+          boss.drillSpinning = true;
+          boss.y = Math.max(ceilingY + 44, boss.y - 5.6);
+          if (mt % 16 === 0) {
+            // Dislodge a falling rock from the cavern roof
+            const debrisX =
+              boss.arenaLeft + 48 + Math.random() * Math.max(80, boss.arenaRight - boss.arenaLeft - 96);
+            spawnHazard(ctx.hazards, 'debris', debrisX, ceilingY + 26, 0, 3.0, 10, 320, true, '#C084FC');
+          }
+          if (mt % 4 === 0) {
+            addParticle(
+              ctx.particles,
+              'brick_debris',
+              boss.x + (Math.random() - 0.5) * 44,
+              boss.y + 18,
+              (Math.random() - 0.5) * 4,
+              2.6,
+              '#6B21A8',
+              6,
+              20
+            );
+          }
+          if (mt >= 96) {
+            boss.mechPhase = 'ground_slam';
+            boss.mechTimer = 0;
+            boss.slamLanded = false;
+          }
+          break;
+        }
+
+        case 'ground_slam': {
+          // GROUND SLAM: plunge from the ceiling with impact shockwaves
+          boss.ceilingBurrow = false;
+          boss.drillSpinning = true;
+          if (!boss.slamLanded && target) {
+            boss.x = Math.max(leftBound, Math.min(rightBound, target.x));
+          }
+          boss.y = Math.min(boss.startY, boss.y + 26);
+          if (boss.y >= boss.startY) {
+            boss.y = boss.startY;
+            if (!boss.slamLanded) {
+              boss.slamLanded = true;
+              soundFX.playLavaBurn();
+              const waveY = floorY - 12;
+              spawnHazard(ctx.hazards, 'shockwave', boss.x - 28, waveY, -6.8, 0, 22, 62, true, '#FACC15', -1);
+              spawnHazard(ctx.hazards, 'shockwave', boss.x + 28, waveY, 6.8, 0, 22, 62, true, '#FACC15', 1);
+              boss.y = boss.startY;
+              for (let d = 0; d < 16; d++) {
+                addParticle(
+                  ctx.particles,
+                  'brick_debris',
+                  boss.x + (Math.random() - 0.5) * 100,
+                  floorY - 6,
+                  (Math.random() - 0.5) * 8,
+                  -2.6 - Math.random() * 4,
+                  d % 2 === 0 ? '#C084FC' : '#7E22CE',
+                  7,
+                  26
+                );
+              }
+              for (let d = 0; d < 6; d++) {
+                spawnHazard(
+                  ctx.hazards,
+                  'debris',
+                  boss.arenaLeft + 60 + Math.random() * Math.max(60, boss.arenaRight - boss.arenaLeft - 120),
+                  ceilingY + 24,
+                  0,
+                  3.4,
+                  9,
+                  300,
+                  true,
+                  '#C084FC'
+                );
+              }
+            }
+          }
+          if (boss.slamLanded && mt >= 60) {
+            boss.slamLanded = false;
+            boss.mechPhase = boss.hp <= 5 ? 'drill_charge' : 'drill_rev';
+            boss.mechTimer = 0;
+            if (target) boss.facing = (target.x >= boss.x ? 1 : -1) as 1 | -1;
+          }
+          break;
         }
       }
     } else if (boss.bossType === 'silversonic') {
