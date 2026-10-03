@@ -38,8 +38,8 @@ type ActiveWorkspaceTab =
   | 'multiplayer';
 
 const STORAGE_KEYS = {
-  LEVELS: 'sonic_velocity_levels_v17',
-  TILESETS: 'sonic_velocity_tilesets_v16',
+  LEVELS: 'sonic_velocity_levels_v19',
+  TILESETS: 'sonic_velocity_tilesets_v17',
   SPECIAL_STAGES: 'sonic_velocity_special_stages_v11',
   EMERALDS: 'sonic_velocity_emeralds_v11',
   SUPER_EMERALDS: 'sonic_velocity_super_emeralds_v11',
@@ -233,19 +233,25 @@ export default function App() {
 
   // Persist custom levels, tilesets, special stages, and emeralds
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.TILESETS, JSON.stringify(tilesets));
-    } catch {
-      // Ignore quota errors
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEYS.TILESETS, JSON.stringify(tilesets));
+      } catch {
+        // Ignore quota errors
+      }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [tilesets]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.LEVELS, JSON.stringify(levels));
-    } catch {
-      // Ignore quota errors
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEYS.LEVELS, JSON.stringify(levels));
+      } catch {
+        // Ignore quota errors
+      }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [levels]);
 
   useEffect(() => {

@@ -432,64 +432,107 @@ export function generateChemicalPlantZonePixelMatrix(
 }
 
 // ============================================================================
-// NEW ZONE TILESET GENERATOR: MYSTIC CAVERNS ZONE (Purple Rocky Spooky Cave
-// with Mine Cart Shafts)
+// NEW ZONE TILESET GENERATOR: MYSTIC CAVERNS ZONE (Purple Rough Rock, Chiseled
+// Basalt Strata, Embedded Cyan Crystals & Fractured Stone Slabs)
 // ============================================================================
 export function generateMysticCavernPixelMatrix(
   pal: TilesetPalette
 ): CustomPixelMatrix {
-  const rockTop = pal.surfaceTop || '#A855F7';
-  const rockLight = pal.surfaceHighlight || '#D8B4FE';
-  const rockMid = pal.soilPrimary || '#7E22CE';
-  const rockDeep = pal.soilSecondary || '#3B0764';
-  const crystal = '#22D3EE';
-  const cartWood = '#B45309';
-  const cartIron = '#475569';
-  const moss = '#4ADE80';
+  // Rich Purple Rough Rock Palette
+  const deepVoid = '#160429';      // Deepest crevice & shadow fissures
+  const rockDeep = pal.soilSecondary || '#2E0A4E'; // Dark basalt underlayer
+  const rockShadow = '#4A156D';    // Rough stone shadow facet
+  const rockMid = pal.soilPrimary || '#6B21A8'; // Main purple rough stone
+  const rockBody = '#7E26C4';     // Craggy rock body
+  const rockLight = pal.surfaceTop || '#993BE8'; // Lit rough rock face
+  const rockHighlight = pal.surfaceHighlight || '#C084FC'; // Chiseled stone crest
+  const rockGlint = '#E9D5FF';     // Sharp quartz fracture glint
+  const crystalCyan = '#22D3EE';   // Embedded cyan crystal inclusion
+  const crystalGlow = '#67E8F9';   // Glowing crystal facet
 
-  const groundTop: string[][] = Array.from({ length: 16 }, (_, y) =>
-    Array.from({ length: 16 }, (_, x) => {
-      if (y === 0) return (x % 6 === 2) ? crystal : rockLight;
-      if (y <= 2) return rockTop;
-      if (y === 3) return (x + y) % 5 === 0 ? crystal : rockTop;
-      if (y === 4 && x % 7 === 3) return moss;
-      const check = (Math.floor(x / 4) + Math.floor((y - 5) / 4)) % 2 === 0;
-      return check ? rockMid : rockDeep;
-    })
-  );
+  // 1. groundTop: Craggy, chipped purple rock crest with jagged surface profile,
+  // fissure cracks, faceted rock blocks, and embedded cyan crystal clusters
+  const groundTop: string[][] = [
+    ['', rockHighlight, rockGlint, rockHighlight, '', rockHighlight, rockGlint, rockHighlight, crystalGlow, crystalCyan, '', rockHighlight, rockGlint, rockHighlight, rockLight, ''],
+    [rockHighlight, rockGlint, rockLight, rockHighlight, rockShadow, rockGlint, rockLight, rockHighlight, crystalCyan, deepVoid, rockHighlight, rockGlint, rockLight, rockHighlight, rockHighlight, rockShadow],
+    [rockLight, rockHighlight, rockBody, rockMid, deepVoid, rockLight, rockBody, rockMid, rockShadow, rockMid, rockLight, rockHighlight, rockBody, rockMid, deepVoid, rockMid],
+    [rockBody, rockMid, deepVoid, rockDeep, rockShadow, rockBody, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockMid, rockDeep, deepVoid, rockShadow, rockBody],
+    [rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockMid, rockShadow, deepVoid, crystalCyan, crystalGlow, rockShadow, rockDeep, deepVoid, rockShadow, rockBody, rockMid],
+    [rockShadow, deepVoid, rockShadow, rockBody, rockLight, rockBody, deepVoid, deepVoid, rockShadow, crystalCyan, deepVoid, rockShadow, rockBody, rockLight, rockBody, rockShadow],
+    [rockDeep, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockShadow, deepVoid, rockShadow, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockDeep],
+    [deepVoid, deepVoid, rockMid, rockBody, rockLight, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, rockDeep, rockShadow, rockMid, rockBody, rockLight, deepVoid],
+    [rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockShadow, deepVoid, rockShadow, rockBody, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockShadow],
+    [rockBody, rockShadow, deepVoid, deepVoid, rockShadow, deepVoid, rockShadow, rockBody, rockLight, rockBody, rockShadow, crystalCyan, deepVoid, deepVoid, rockShadow, rockBody],
+    [rockLight, rockBody, rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockLight],
+    [rockBody, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockMid, rockLight, rockBody, rockShadow, deepVoid, rockShadow, rockDeep, deepVoid, deepVoid, rockBody],
+    [rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockBody, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockBody, deepVoid, deepVoid, rockMid],
+    [deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockShadow, deepVoid, deepVoid],
+    [rockShadow, rockDeep, deepVoid, rockShadow, rockBody, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockBody, rockMid, deepVoid, rockShadow, rockDeep],
+    [deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid],
+  ];
 
-  const groundDeep: string[][] = Array.from({ length: 16 }, (_, y) =>
-    Array.from({ length: 16 }, (_, x) => {
-      if (x === 0 || x === 15 || y === 0 || y === 15) return rockMid;
-      // Buried mine cart rail shaft running horizontally through the rock
-      if (y >= 7 && y <= 9) {
-        if (y === 8) return cartIron;
-        if (x % 4 === 0) return cartWood;
-        return rockDeep;
-      }
-      if ((x * 7 + y * 13) % 23 === 0) return crystal;
-      return (x + y) % 4 === 0 ? '#5B21B6' : rockDeep;
-    })
-  );
+  // 2. groundDeep: Seamless fractured subterranean purple bedrock with jagged diagonal
+  // stone cleavage lines, embedded amethyst pockets, and rough chiseled mineral facets
+  const groundDeep: string[][] = [
+    [deepVoid, rockShadow, rockBody, rockLight, deepVoid, rockShadow, rockBody, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockBody, deepVoid, deepVoid],
+    [rockShadow, rockBody, rockLight, rockHighlight, rockShadow, deepVoid, rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockLight, rockShadow, deepVoid],
+    [rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockMid, deepVoid, rockShadow],
+    [rockLight, rockBody, rockMid, deepVoid, deepVoid, rockShadow, deepVoid, crystalCyan, crystalGlow, rockShadow, rockLight, rockBody, deepVoid, deepVoid, deepVoid, rockBody],
+    [rockBody, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockShadow, deepVoid, crystalCyan, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight],
+    [deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockBody, deepVoid],
+    [deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockShadow, deepVoid],
+    [rockShadow, rockBody, rockLight, rockBody, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, rockShadow],
+    [rockBody, rockLight, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockMid, deepVoid, deepVoid, deepVoid, rockBody],
+    [deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, rockLight, rockHighlight],
+    [deepVoid, rockShadow, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, deepVoid, crystalCyan, rockShadow, rockBody, rockLight, rockBody],
+    [rockShadow, rockBody, rockShadow, deepVoid, rockShadow, rockBody, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockMid],
+    [rockBody, rockLight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockShadow, deepVoid, deepVoid, rockShadow, rockDeep],
+    [rockLight, rockHighlight, rockBody, rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid],
+    [rockBody, rockLight, rockMid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid, rockShadow, deepVoid, deepVoid, rockShadow],
+    [deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockBody, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockShadow, deepVoid, deepVoid],
+  ];
 
-  const platform: string[][] = Array.from({ length: 16 }, (_, y) =>
-    Array.from({ length: 16 }, (_, x) => {
-      if (y === 0) return cartIron;
-      if (y === 1) return x % 4 === 0 ? cartIron : cartWood;
-      if (y === 2) return cartWood;
-      if (y === 3) return x % 8 === 3 ? cartIron : rockMid;
-      return '';
-    })
-  );
+  // 3. platform: Carved rough purple rock slab ledge with chipped stone bevels,
+  // embedded cyan crystal accents, and rugged chiseled stone underside
+  const platform: string[][] = [
+    ['', rockHighlight, rockGlint, rockHighlight, rockGlint, rockHighlight, rockGlint, crystalGlow, crystalCyan, rockHighlight, rockGlint, rockHighlight, rockGlint, rockHighlight, '', ''],
+    [rockHighlight, rockGlint, rockLight, rockHighlight, rockLight, rockGlint, rockHighlight, crystalCyan, crystalCyan, rockLight, rockGlint, rockLight, rockHighlight, rockGlint, rockHighlight, rockShadow],
+    [rockLight, rockHighlight, rockBody, rockLight, rockBody, rockHighlight, rockBody, rockMid, rockShadow, rockBody, rockLight, rockBody, rockHighlight, rockBody, rockLight, rockDeep],
+    [rockBody, rockLight, rockMid, rockBody, rockMid, rockLight, rockMid, deepVoid, deepVoid, rockMid, rockBody, rockMid, rockLight, rockMid, rockBody, deepVoid],
+    [rockMid, rockBody, deepVoid, rockMid, deepVoid, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, rockMid, deepVoid, rockBody, deepVoid, rockMid, deepVoid],
+    [deepVoid, rockMid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+  ];
 
-  const breakableRock: string[][] = Array.from({ length: 16 }, (_, y) =>
-    Array.from({ length: 16 }, (_, x) => {
-      if (y === 0 || y === 15) return rockDeep;
-      const crack = (x + y * 2) % 9 === 0 || (x * 2 - y) % 11 === 0;
-      if (crack) return '#2E1065';
-      return (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0 ? rockMid : '#6B21A8';
-    })
-  );
+  // 4. breakableRock: Heavily fractured purple boulder with jagged branching cracks,
+  // crumbling stone chips, and high-contrast fault fissures showing it's brittle
+  const breakableRock: string[][] = [
+    [deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockLight, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, rockBody, deepVoid, deepVoid],
+    [deepVoid, rockShadow, rockBody, rockLight, rockGlint, rockHighlight, deepVoid, deepVoid, deepVoid, deepVoid, rockLight, rockGlint, rockHighlight, rockLight, rockShadow, deepVoid],
+    [rockShadow, rockBody, rockLight, rockHighlight, rockLight, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, deepVoid, rockHighlight, rockLight, rockBody, rockMid, deepVoid],
+    [rockBody, rockLight, rockHighlight, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, rockLight, deepVoid, deepVoid, deepVoid, rockBody, rockMid, deepVoid, rockShadow],
+    [rockLight, rockHighlight, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockHighlight, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody],
+    [rockHighlight, deepVoid, deepVoid, rockShadow, rockBody, rockLight, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, deepVoid, deepVoid, rockBody, rockLight],
+    [rockLight, deepVoid, rockShadow, rockBody, rockLight, deepVoid, deepVoid, crystalCyan, crystalGlow, deepVoid, deepVoid, rockLight, rockHighlight, deepVoid, rockLight, rockHighlight],
+    [deepVoid, deepVoid, rockBody, rockLight, deepVoid, deepVoid, deepVoid, crystalCyan, deepVoid, deepVoid, deepVoid, deepVoid, rockLight, rockBody, deepVoid, deepVoid],
+    [deepVoid, deepVoid, rockLight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, deepVoid, deepVoid, rockBody, rockLight, deepVoid],
+    [rockShadow, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, deepVoid, deepVoid, rockShadow, rockBody, rockLight, deepVoid, deepVoid, deepVoid, rockShadow],
+    [rockBody, rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockLight, deepVoid, deepVoid, rockBody, rockLight, rockHighlight, deepVoid, deepVoid, rockShadow, rockBody],
+    [rockLight, rockBody, deepVoid, deepVoid, rockBody, rockLight, deepVoid, deepVoid, deepVoid, deepVoid, rockHighlight, rockLight, deepVoid, deepVoid, rockBody, rockLight],
+    [rockHighlight, rockLight, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, deepVoid, deepVoid, deepVoid, deepVoid, rockBody, rockLight, rockHighlight],
+    [rockLight, rockHighlight, rockLight, rockShadow, deepVoid, deepVoid, rockShadow, rockBody, rockLight, rockBody, deepVoid, deepVoid, rockShadow, rockLight, rockHighlight, rockLight],
+    [deepVoid, rockLight, rockHighlight, rockBody, rockShadow, deepVoid, deepVoid, rockBody, rockLight, rockHighlight, deepVoid, rockShadow, rockBody, rockHighlight, rockLight, deepVoid],
+    [deepVoid, deepVoid, rockShadow, rockBody, rockMid, deepVoid, deepVoid, deepVoid, rockShadow, rockBody, deepVoid, deepVoid, rockBody, rockMid, deepVoid, deepVoid],
+  ];
 
   return { groundTop, groundDeep, platform, breakableRock };
 }
@@ -618,16 +661,23 @@ export function getDefaultTilePixelMatrix(
   }
 
   if (key === 'stalactite') {
-    // Mystic Caverns Falling Rock Stalactite: purple rock cone pointing down
+    // Mystic Caverns Falling Rock Stalactite: craggy purple rough rock with quartz fissures and cyan crystal tip
+    const rockShadow = '#2E0A4E';
+    const rockMid = '#581C87';
+    const rockLight = '#7E26C4';
+    const rockHighlight = '#C084FC';
+    const crystal = '#22D3EE';
+    const crystalTip = '#67E8F9';
     return Array.from({ length: 16 }, (_, y) =>
       Array.from({ length: 16 }, (_, x) => {
-        if (y === 0) return '#334155';
-        const halfWidth = Math.max(1, 8 - y * 0.78);
+        if (y === 0) return (x >= 2 && x <= 13) ? rockShadow : '';
+        const halfW = Math.max(0.5, 6.8 - y * 0.44);
         const dist = Math.abs(x - 7.5);
-        if (dist > halfWidth) return '';
-        if (dist > halfWidth - 1.5) return '#4C1D95';
-        if (y % 4 === 0) return '#2E1065';
-        return (x + y) % 3 === 0 ? '#7E22CE' : '#5B21B6';
+        if (dist > halfW) return '';
+        if (y >= 14) return y === 15 ? crystalTip : crystal;
+        if (dist > halfW - 1) return rockShadow;
+        if (x < 7.5) return (x + y) % 3 === 0 ? rockHighlight : rockLight;
+        return (x + y) % 2 === 0 ? rockMid : rockShadow;
       })
     );
   }
@@ -673,22 +723,69 @@ export function getDefaultTilePixelMatrix(
     );
   }
 
-  if (key === 'bossChemical' || key === 'bossMystic') {
-    // Tileset Studio boss icon plates (drawn as the mech chassis core in-game)
-    const isChemical = key === 'bossChemical';
+  if (key === 'bossChemical') {
+    // Chemical Plant Slime-Crusher Mech plate
     return Array.from({ length: 16 }, (_, y) =>
       Array.from({ length: 16 }, (_, x) => {
-        const hull = isChemical ? '#94A3B8' : '#6B21A8';
-        const trim = isChemical ? '#FACC15' : '#22D3EE';
         if (x < 1 || x > 14 || y < 1 || y > 14) return '#0F172A';
-        if (y === 1 || y === 14 || x === 1 || x === 14) return trim;
+        if (y === 1 || y === 14 || x === 1 || x === 14) return '#FACC15';
         if (y >= 5 && y <= 10 && x >= 4 && x <= 11) {
-          if (Math.hypot(x - 7.5, y - 7.5) <= 2.6) return trim;
+          if (Math.hypot(x - 7.5, y - 7.5) <= 2.6) return '#38BDF8';
           return '#0F172A';
         }
-        return hull;
+        return '#94A3B8';
       })
     );
+  }
+
+  if (key === 'bossMystic') {
+    // Mystic Caverns Egg Drill-Crusher Mech plate:
+    // Purple rough-rock armor, cyan canopy visor, chrome conical spiral drill & heavy tank tracks
+    const darkHull = '#2E0A4E';
+    const purpleRock = '#6B21A8';
+    const purpleLight = '#9333EA';
+    const cyanTrim = '#22D3EE';
+    const cyanGlass = '#67E8F9';
+    const drillChrome = '#CBD5E1';
+    const drillShadow = '#475569';
+    const treadDark = '#0F172A';
+    const treadMetal = '#334155';
+    const eggmanRed = '#DC2626';
+
+    return [
+      // 0: Canopy crest
+      ['', '', '', '', '', darkHull, purpleLight, purpleLight, darkHull, '', '', '', '', '', '', ''],
+      // 1: Cockpit dome with cyan glass visor
+      ['', '', '', '', darkHull, cyanTrim, cyanGlass, cyanGlass, cyanTrim, darkHull, '', '', '', '', '', ''],
+      // 2: Eggman silhouette inside canopy
+      ['', '', '', darkHull, cyanTrim, '#0F172A', eggmanRed, eggmanRed, '#0F172A', cyanTrim, darkHull, '', '', '', '', ''],
+      // 3: Canopy base & armor collar
+      ['', '', darkHull, purpleRock, purpleLight, purpleRock, purpleRock, purpleRock, purpleLight, purpleRock, darkHull, '', '', '', '', ''],
+      // 4: Chassis top & drill mount begins
+      ['', darkHull, purpleLight, purpleRock, cyanTrim, purpleLight, purpleRock, cyanTrim, drillShadow, drillChrome, drillChrome, '', '', '', '', ''],
+      // 5: Main purple rock hull & rotating spiral drill flutes
+      [darkHull, purpleRock, purpleLight, cyanTrim, darkHull, purpleRock, cyanTrim, drillShadow, drillChrome, drillShadow, drillChrome, drillChrome, '', '', '', ''],
+      // 6: Hull center & drill mid-section
+      [darkHull, purpleRock, cyanTrim, darkHull, darkHull, cyanTrim, drillShadow, drillChrome, drillShadow, drillChrome, drillShadow, drillChrome, drillChrome, cyanTrim, '', ''],
+      // 7: Heavy armor core & drill tip pointing forward
+      [darkHull, purpleLight, cyanTrim, purpleRock, purpleLight, drillShadow, drillChrome, drillShadow, drillChrome, drillShadow, drillChrome, drillShadow, cyanTrim, cyanGlass, cyanTrim, ''],
+      // 8: Lower hull & lower drill flutes
+      [darkHull, purpleRock, purpleLight, purpleRock, purpleRock, drillShadow, drillChrome, drillShadow, drillChrome, drillShadow, drillChrome, drillChrome, cyanTrim, '', '', ''],
+      // 9: Chassis underside & mudguards
+      [darkHull, purpleRock, purpleRock, darkHull, darkHull, darkHull, drillShadow, drillChrome, drillShadow, drillChrome, drillChrome, '', '', '', '', ''],
+      // 10: Track guard rail with rivets
+      ['', darkHull, darkHull, darkHull, darkHull, darkHull, darkHull, darkHull, darkHull, drillShadow, '', '', '', '', '', ''],
+      // 11: Upper track tread links
+      ['', treadDark, treadMetal, treadDark, treadMetal, treadDark, treadMetal, treadDark, treadMetal, treadDark, treadDark, '', '', '', '', ''],
+      // 12: Road wheels with chrome hubs
+      ['', treadDark, '#64748B', treadDark, '#64748B', treadDark, '#64748B', treadDark, '#64748B', treadDark, '', '', '', '', '', ''],
+      // 13: Road wheel hubs & track frame
+      ['', treadDark, '#94A3B8', treadDark, '#94A3B8', treadDark, '#94A3B8', treadDark, '#94A3B8', treadDark, '', '', '', '', '', ''],
+      // 14: Lower road wheels
+      ['', treadDark, '#64748B', treadDark, '#64748B', treadDark, '#64748B', treadDark, '#64748B', treadDark, '', '', '', '', '', ''],
+      // 15: Ground contact track teeth
+      ['', treadMetal, treadDark, treadMetal, treadDark, treadMetal, treadDark, treadMetal, treadDark, treadMetal, '', '', '', '', '', ''],
+    ];
   }
 
   if (key === 'lava') {
@@ -1131,36 +1228,36 @@ export const DEFAULT_TILESETS: TilesetConfig[] = [
   {
     id: 'mystic-caverns',
     name: 'Mystic Caverns Zone',
-    zoneSubtitle: 'Purple Spooky Caverns, Crystal Grottoes & Mine Cart Shafts',
+    zoneSubtitle: 'Purple Rough Rock, Chiseled Basalt Strata & Amethyst Caverns',
     decorStyle: 'cave',
     palette: {
-      skyTop: '#160B2E',
-      skyBottom: '#3B0764',
-      mountainFar: '#2E1065',
-      hillNear: '#4C1D95',
+      skyTop: '#120424',
+      skyBottom: '#2E0A4E',
+      mountainFar: '#1F0635',
+      hillNear: '#3D0E66',
       waterColor: '#7C3AED',
-      surfaceTop: '#A855F7',
-      surfaceHighlight: '#D8B4FE',
-      soilPrimary: '#7E22CE',
-      soilSecondary: '#3B0764',
-      platformTop: '#B45309',
-      brickColor: '#6B21A8',
-      brickMortar: '#2E1065',
+      surfaceTop: '#993BE8',
+      surfaceHighlight: '#C084FC',
+      soilPrimary: '#6B21A8',
+      soilSecondary: '#2E0A4E',
+      platformTop: '#993BE8',
+      brickColor: '#581C87',
+      brickMortar: '#160429',
       hazardColor: '#E9D5FF',
     },
     customPixels: generateMysticCavernPixelMatrix({
-      skyTop: '#160B2E',
-      skyBottom: '#3B0764',
-      mountainFar: '#2E1065',
-      hillNear: '#4C1D95',
+      skyTop: '#120424',
+      skyBottom: '#2E0A4E',
+      mountainFar: '#1F0635',
+      hillNear: '#3D0E66',
       waterColor: '#7C3AED',
-      surfaceTop: '#A855F7',
-      surfaceHighlight: '#D8B4FE',
-      soilPrimary: '#7E22CE',
-      soilSecondary: '#3B0764',
-      platformTop: '#B45309',
-      brickColor: '#6B21A8',
-      brickMortar: '#2E1065',
+      surfaceTop: '#993BE8',
+      surfaceHighlight: '#C084FC',
+      soilPrimary: '#6B21A8',
+      soilSecondary: '#2E0A4E',
+      platformTop: '#993BE8',
+      brickColor: '#581C87',
+      brickMortar: '#160429',
       hazardColor: '#E9D5FF',
     }),
   },
@@ -1752,8 +1849,8 @@ function buildBrokenTest01(): LevelData {
 
   return {
     id: 'broken-test-01',
-    name: 'Broken Test 01',
-    act: 1,
+    name: 'Emerald Heights',
+    act: 3,
     author: 'Sonic Velocity Studio',
     width,
     height,
@@ -2678,88 +2775,165 @@ function buildChemicalPlantAct2(): LevelData {
 
 // ============================================================================
 // LEVEL 11: MYSTIC CAVERNS ZONE — ACT 1
-// (Purple Spooky Caverns, Falling Stalactites, Bed & Ceiling Spikes,
-//  Vertical Elevators, Mine Cart Shafts & Breakable Rock Secret Vaults)
+// (Multi-Tiered Purple Caverns: Upper High-Speed Mine Rails, Middle Crystal
+//  Tunnels, Deep Stalactite Abyss, Swinging Platforms & Secret Gem Vaults)
 // ============================================================================
 function buildMysticCavernsAct1(): LevelData {
-  const width = 234;
-  const height = 32;
+  const width = 250;
+  const height = 34;
   const grid = createEmptyGrid(width, height);
 
-  // Section 1: Crystal Grotto Entrance with Stalactite-Dripped Roof (x 0..40)
-  fillRect(grid, 0, 0, 40, 18, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 0, 24, 40, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[23][4] = TileType.SPAWN_P1;
-  grid[23][2] = TileType.SPAWN_P2;
-  for (let x = 7; x <= 15; x++) grid[22][x] = TileType.RING;
-  grid[23][17] = TileType.MONITOR_SHIELD;
-  grid[22][20] = TileType.BADNIK_BATBRAIN;
-  for (let sx = 10; sx <= 34; sx += 6) grid[18][sx] = TileType.GIMMICK_STALACTITE;
-  for (let sx = 24; sx <= 30; sx++) grid[24][sx] = TileType.SPIKES_UP; // Floor spike bed
-  for (let x = 24; x <= 30; x += 2) grid[21][x] = TileType.RING;
+  // Section 1: Cavern Mouth & First Momentum Chute (x 0..42)
+  // Ceiling rock arch
+  fillRect(grid, 0, 0, 42, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  // Starting floor
+  fillRect(grid, 0, 20, 14, 14, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[19][4] = TileType.SPAWN_P1;
+  grid[19][2] = TileType.SPAWN_P2;
+  for (let x = 6; x <= 12; x++) grid[18][x] = TileType.RING;
+  grid[19][13] = TileType.MONITOR_SHIELD;
 
-  // Section 2: Mine Cart Elevator Shaft & Breakable Rock Vault (x 40..96)
-  fillRect(grid, 40, 0, 56, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 40, 24, 56, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  // Vertical elevator shaft carved up into the rock
-  for (let ry = 12; ry <= 23; ry++) {
-    for (let rx = 55; rx <= 66; rx++) grid[ry][rx] = TileType.EMPTY;
-  }
-  grid[19][58] = TileType.MOVING_PLATFORM_VERT;
-  grid[21][63] = TileType.MOVING_PLATFORM_VERT;
-  grid[12][61] = TileType.RING;
-  grid[14][61] = TileType.RING;
-  grid[16][61] = TileType.RING;
-  grid[22][55] = TileType.CHECKPOINT;
-  // Breakable rock wall hiding a secret vault with a Giant Ring
-  fillRect(grid, 70, 18, 12, 6, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let ry = 19; ry <= 22; ry++) {
-    for (let rx = 71; rx <= 80; rx++) grid[ry][rx] = TileType.EMPTY;
-    grid[ry][70] = TileType.BREAKABLE_ROCK;
-  }
-  grid[23][74] = TileType.GIANT_RING;
-  grid[23][77] = TileType.MONITOR_RING;
-  grid[21][68] = TileType.BADNIK_CATERKILLER;
+  // Downhill momentum slope plunging into the lower cavern tunnel
+  addSlopeRunDown(grid, 14, 20, 5); // x: 14..23, y drops from 20 to 25
+  fillRect(grid, 24, 25, 18, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[24][26] = TileType.BOOSTER_RIGHT;
+  grid[19][32] = TileType.LOOP_HEAD; // Full loop inside the cavern!
+  for (let x = 36; x <= 40; x++) grid[23][x] = TileType.RING;
 
-  // Section 3: Low Ceiling Spike Corridor & Mine Cart Shaft (x 96..152)
-  fillRect(grid, 96, 0, 56, 14, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 96, 23, 56, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[22][99] = TileType.CHECKPOINT;
-  for (let sx = 104; sx <= 138; sx += 3) grid[22][sx] = TileType.SPIKES_UP;
-  for (let sx = 105; sx <= 139; sx += 3) grid[18][sx] = TileType.SPIKES_DOWN;
-  for (let sx = 106; sx <= 136; sx += 6) grid[14][sx] = TileType.GIMMICK_STALACTITE;
-  fillRect(grid, 100, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
-  fillRect(grid, 110, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
-  fillRect(grid, 120, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
-  fillRect(grid, 130, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
-  for (let x = 101; x <= 104; x++) grid[16][x] = TileType.RING;
-  grid[16][124] = TileType.BADNIK_BATBRAIN;
-  grid[22][146] = TileType.BADNIK_CATERKILLER;
-  grid[21][150] = TileType.SPRING_RED;
+  // Upper Mine Rail Branch (reachable via loop launch or spring)
+  fillRect(grid, 22, 14, 18, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[12][24] = TileType.RING;
+  grid[12][26] = TileType.RING;
+  grid[13][28] = TileType.MONITOR_SPEED;
+  grid[13][38] = TileType.SPRING_RED; // Launches to the upper viaduct!
 
-  // Section 4: Deep Cavern Descent, Second Elevator Shaft & Finale (x 152..234)
-  fillRect(grid, 152, 0, 82, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 152, 25, 82, 7, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let ry = 10; ry <= 24; ry++) {
-    for (let rx = 160; rx <= 170; rx++) grid[ry][rx] = TileType.EMPTY;
+  // Section 2: Three-Tier Branching Cavern (x 42..98)
+  // Continuous cavern ceiling with hanging stalactites
+  fillRect(grid, 42, 0, 56, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 46; sx <= 92; sx += 8) grid[9][sx] = TileType.GIMMICK_STALACTITE;
+
+  // --- TIER 1: Upper High-Speed Mine Rail (y: 11..14) ---
+  fillRect(grid, 44, 12, 14, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[11][48] = TileType.GIMMICK_DASH_RING;
+  grid[11][54] = TileType.SWINGING_PLATFORM;
+  fillRect(grid, 58, 12, 12, 1, TileType.PLATFORM, TileType.PLATFORM);
+  for (let x = 60; x <= 66; x += 2) grid[10][x] = TileType.RING;
+  grid[11][74] = TileType.SWINGING_PLATFORM;
+  fillRect(grid, 78, 13, 14, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[12][82] = TileType.MONITOR_INVINCIBILITY;
+  grid[12][88] = TileType.BOOSTER_RIGHT;
+
+  // --- TIER 2: Middle Crystal Tunnel & S-Slopes (y: 19..24) ---
+  fillRect(grid, 42, 23, 12, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[22][45] = TileType.BADNIK_CATERKILLER;
+  addSlopeRunUp(grid, 54, 23, 4); // x: 54..61, y climbs from 23 to 19
+  fillRect(grid, 62, 19, 14, 15, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[18][65] = TileType.CHECKPOINT;
+  for (let x = 67; x <= 72; x++) grid[17][x] = TileType.RING;
+  grid[17][70] = TileType.BADNIK_BATBRAIN;
+  addSlopeRunDown(grid, 76, 19, 4); // x: 76..83, y drops back to 23
+  fillRect(grid, 84, 23, 14, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 87; sx <= 93; sx += 3) grid[22][sx] = TileType.SPIKES_UP;
+
+  // --- TIER 3: Lower Mine Shaft & Secret Gem Vault (y: 27..33) ---
+  fillRect(grid, 42, 30, 24, 4, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 44; sx <= 54; sx += 2) grid[30][sx] = TileType.SPIKES_UP;
+  // Vertical elevator shaft connecting lower and middle tiers
+  grid[26][68] = TileType.MOVING_PLATFORM_VERT;
+  grid[21][68] = TileType.MOVING_PLATFORM_VERT;
+  // Breakable rock wall concealing the secret Giant Ring Vault
+  fillRect(grid, 82, 26, 14, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 27; ry <= 31; ry++) {
+    for (let rx = 84; rx <= 94; rx++) grid[ry][rx] = TileType.EMPTY;
+    grid[ry][83] = TileType.BREAKABLE_ROCK;
   }
-  grid[21][163] = TileType.MOVING_PLATFORM_VERT;
-  grid[12][167] = TileType.RING;
-  grid[14][164] = TileType.RING;
-  grid[24][158] = TileType.CHECKPOINT;
-  // Shaft exit ledge
-  fillRect(grid, 171, 20, 8, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[19][174] = TileType.RING;
-  grid[19][176] = TileType.MONITOR_BUBBLE;
-  // Rocky overhang dripping stalactites down onto the spike beds below
-  fillRect(grid, 178, 13, 24, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 182; sx <= 198; sx += 8) grid[15][sx] = TileType.GIMMICK_STALACTITE;
-  for (let sx = 186; sx <= 200; sx += 5) grid[25][sx] = TileType.SPIKES_UP;
-  grid[24][204] = TileType.BADNIK_CATERKILLER;
-  grid[24][208] = TileType.MONITOR_INVINCIBILITY;
-  fillRect(grid, 212, 21, 10, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let x = 210; x <= 216; x += 2) grid[20][x] = TileType.RING;
-  grid[24][226] = TileType.GOAL_POST;
+  grid[31][86] = TileType.GIANT_RING;
+  grid[31][89] = TileType.MONITOR_1UP;
+  grid[31][91] = TileType.RING;
+  grid[31][92] = TileType.RING;
+
+  // Section 3: The Great Crystal Chasm & Stalactite Gauntlet (x 98..172)
+  fillRect(grid, 98, 0, 74, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 104; sx <= 164; sx += 6) grid[9][sx] = TileType.GIMMICK_STALACTITE;
+
+  // Chasm entrance landing
+  fillRect(grid, 98, 21, 12, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[20][101] = TileType.CHECKPOINT;
+  grid[20][104] = TileType.MONITOR_FLAME;
+  grid[20][107] = TileType.BOOSTER_RIGHT;
+
+  // Floating crystal pillars across the deep void
+  fillRect(grid, 114, 23, 6, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[21][116] = TileType.RING;
+  grid[21][117] = TileType.RING;
+  grid[22][118] = TileType.BADNIK_CATERKILLER;
+
+  // High aerial route across the chasm
+  grid[13][118] = TileType.SWINGING_PLATFORM;
+  fillRect(grid, 124, 14, 10, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[12][126] = TileType.GIMMICK_DASH_RING;
+  for (let x = 128; x <= 132; x += 2) grid[12][x] = TileType.RING;
+  grid[13][138] = TileType.SWINGING_PLATFORM;
+
+  // Middle rock islands & ceiling spike hazards
+  fillRect(grid, 128, 22, 8, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 129; sx <= 133; sx += 2) grid[21][sx] = TileType.SPIKES_UP;
+  fillRect(grid, 127, 16, 10, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 129; sx <= 133; sx += 2) grid[18][sx] = TileType.SPIKES_DOWN; // Ceiling spikes!
+
+  fillRect(grid, 142, 21, 8, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[19][144] = TileType.BADNIK_BATBRAIN;
+  grid[20][147] = TileType.SPRING_RED;
+
+  // Lower chasm floor with floor spikes and rescue vertical elevator
+  fillRect(grid, 110, 31, 46, 3, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
+  for (let sx = 112; sx <= 152; sx += 3) grid[30][sx] = TileType.SPIKES_UP;
+  grid[28][154] = TileType.MOVING_PLATFORM_VERT;
+  grid[23][154] = TileType.MOVING_PLATFORM_VERT;
+
+  // Landing ledge on the far side of the chasm
+  fillRect(grid, 156, 19, 16, 15, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[18][158] = TileType.CHECKPOINT;
+  for (let x = 160; x <= 168; x += 2) grid[17][x] = TileType.RING;
+  grid[18][166] = TileType.MONITOR_LIGHTNING;
+
+  // Section 4: Vertical Shaft Ascent & Runaway Mine Cart Finale (x 172..250)
+  fillRect(grid, 172, 0, 78, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+
+  // Twin elevator ascent shaft carved through solid purple rock
+  fillRect(grid, 172, 8, 20, 26, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 9; ry <= 25; ry++) {
+    for (let rx = 175; rx <= 186; rx++) grid[ry][rx] = TileType.EMPTY;
+  }
+  grid[23][178] = TileType.MOVING_PLATFORM_VERT;
+  grid[16][182] = TileType.MOVING_PLATFORM_VERT;
+  grid[11][180] = TileType.RING;
+  grid[13][180] = TileType.RING;
+  grid[15][180] = TileType.RING;
+
+  // Upper high-speed rail departure deck (y: 11)
+  fillRect(grid, 187, 12, 14, 22, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[11][189] = TileType.BOOSTER_RIGHT;
+  grid[11][194] = TileType.MONITOR_SPEED;
+
+  // Grand downhill runaway rail plunging into the cavern depths
+  addSlopeRunDown(grid, 201, 12, 5); // x: 201..210, drops from 12 to 17
+  fillRect(grid, 211, 17, 39, 17, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[16][213] = TileType.BOOSTER_RIGHT;
+  grid[11][219] = TileType.LOOP_HEAD; // Final thrilling loop!
+  for (let x = 224; x <= 232; x += 2) grid[15][x] = TileType.RING;
+  grid[16][228] = TileType.BADNIK_CATERKILLER;
+
+  // Stalactites hanging directly over the finish stretch
+  for (let sx = 226; sx <= 238; sx += 4) grid[8][sx] = TileType.GIMMICK_STALACTITE;
+
+  // Hidden high crystal shelf above the goal with a Giant Ring
+  fillRect(grid, 235, 12, 8, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[11][237] = TileType.GIANT_RING;
+  grid[11][240] = TileType.RING;
+
+  // Goal signpost
+  grid[16][244] = TileType.GOAL_POST;
 
   return {
     id: 'mystic-caverns-act-1',
@@ -2770,94 +2944,150 @@ function buildMysticCavernsAct1(): LevelData {
     height,
     tilesetId: 'mystic-caverns',
     grid,
-    p1Spawn: { x: 4, y: 23 },
-    p2Spawn: { x: 2, y: 23 },
+    p1Spawn: { x: 4, y: 19 },
+    p2Spawn: { x: 2, y: 19 },
   };
 }
 
 // ============================================================================
 // LEVEL 12: MYSTIC CAVERNS ZONE — ACT 2
-// (Egg Drill-Crusher — Drill Charge, Wall-Crash Stun 115 Frames,
-//  Ceiling Burrow Tremors & Ground Slam Shockwaves)
+// (Expanded Subterranean Grottoes, Multi-Tier Mine Shafts, Stalactite Run,
+//  and Engineered Arena for the Egg Drill-Crusher with Dodge Catwalks!)
 // ============================================================================
 function buildMysticCavernsAct2(): LevelData {
-  const width = 240;
-  const height = 32;
+  const width = 256;
+  const height = 34;
   const grid = createEmptyGrid(width, height);
 
-  // Section 1: Spooky Purple Grotto & Falling Stalactite Run (x 0..44)
-  fillRect(grid, 0, 0, 44, 17, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 0, 24, 44, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[23][4] = TileType.SPAWN_P1;
-  grid[23][2] = TileType.SPAWN_P2;
-  for (let x = 7; x <= 14; x++) grid[22][x] = TileType.RING;
-  grid[23][16] = TileType.MONITOR_FLAME;
-  grid[23][18] = TileType.MONITOR_SPEED;
-  for (let sx = 9; sx <= 39; sx += 5) grid[17][sx] = TileType.GIMMICK_STALACTITE;
-  grid[22][22] = TileType.BADNIK_BATBRAIN;
-  for (let sx = 28; sx <= 34; sx += 2) grid[24][sx] = TileType.SPIKES_UP;
+  // Section 1: Deep Cavern Drop & Momentum Loop Chute (x 0..46)
+  fillRect(grid, 0, 0, 46, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 0, 19, 14, 15, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[18][4] = TileType.SPAWN_P1;
+  grid[18][2] = TileType.SPAWN_P2;
+  for (let x = 6; x <= 12; x++) grid[17][x] = TileType.RING;
+  grid[18][11] = TileType.MONITOR_FLAME;
+  grid[18][13] = TileType.MONITOR_SPEED;
 
-  // Section 2: Mine Cart Shaft, Elevator Ascent & Rock Vault (x 44..104)
-  fillRect(grid, 44, 0, 60, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 44, 25, 60, 7, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let ry = 11; ry <= 24; ry++) {
-    for (let rx = 52; rx <= 62; rx++) grid[ry][rx] = TileType.EMPTY;
+  // Steep downward slope into an underground accelerator
+  addSlopeRunDown(grid, 14, 19, 5); // x: 14..23, drops to 24
+  fillRect(grid, 24, 24, 22, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[23][26] = TileType.BOOSTER_RIGHT;
+  grid[18][32] = TileType.LOOP_HEAD; // Loop-de-loop!
+  for (let x = 36; x <= 42; x++) grid[22][x] = TileType.RING;
+  grid[23][43] = TileType.BADNIK_BATBRAIN;
+
+  // Upper crystal ledge reachable via loop momentum
+  fillRect(grid, 26, 14, 16, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[13][30] = TileType.MONITOR_BUBBLE;
+  grid[13][38] = TileType.SPRING_RED; // Launches to the upper mine cart tracks!
+
+  // Section 2: Twin Mine Shafts & Multi-Tier Trestle (x 46..116)
+  fillRect(grid, 46, 0, 70, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 50; sx <= 110; sx += 8) grid[8][sx] = TileType.GIMMICK_STALACTITE;
+
+  // --- UPPER ROUTE: High Mine Cart Rail (y: 11..13) ---
+  fillRect(grid, 48, 12, 12, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[11][52] = TileType.GIMMICK_DASH_RING;
+  grid[11][57] = TileType.SWINGING_PLATFORM;
+  fillRect(grid, 62, 12, 14, 1, TileType.PLATFORM, TileType.PLATFORM);
+  for (let x = 64; x <= 70; x += 2) grid[10][x] = TileType.RING;
+  grid[11][74] = TileType.MONITOR_LIGHTNING;
+  grid[11][80] = TileType.SWINGING_PLATFORM;
+  fillRect(grid, 84, 12, 16, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[11][88] = TileType.BOOSTER_RIGHT;
+
+  // --- MIDDLE ROUTE: Undulating Cavern Floor (y: 20..24) ---
+  fillRect(grid, 46, 23, 14, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[22][48] = TileType.CHECKPOINT;
+  grid[22][52] = TileType.BADNIK_CATERKILLER;
+  addSlopeRunUp(grid, 60, 23, 4); // x: 60..67, climbs to 19
+  fillRect(grid, 68, 19, 14, 15, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let x = 70; x <= 76; x += 2) grid[17][x] = TileType.RING;
+  grid[18][78] = TileType.BADNIK_BATBRAIN;
+  addSlopeRunDown(grid, 82, 19, 4); // x: 82..89, drops to 23
+  fillRect(grid, 90, 23, 16, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 94; sx <= 102; sx += 3) grid[22][sx] = TileType.SPIKES_UP;
+
+  // --- LOWER ROUTE: Elevator Shaft & Secret Gem Vault (y: 26..33) ---
+  // Vertical elevator shaft connecting the tiers
+  grid[26][76] = TileType.MOVING_PLATFORM_VERT;
+  grid[21][76] = TileType.MOVING_PLATFORM_VERT;
+  // Breakable rock wall hiding Giant Ring and 1-Up
+  fillRect(grid, 92, 26, 16, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 27; ry <= 31; ry++) {
+    for (let rx = 94; rx <= 106; rx++) grid[ry][rx] = TileType.EMPTY;
+    grid[ry][93] = TileType.BREAKABLE_ROCK;
   }
-  grid[21][55] = TileType.MOVING_PLATFORM_VERT;
-  grid[14][59] = TileType.RING;
-  grid[12][59] = TileType.RING;
-  fillRect(grid, 63, 19, 8, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[18][66] = TileType.CHECKPOINT;
-  // Breakable rock vault hiding a Giant Ring
-  fillRect(grid, 74, 17, 14, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let ry = 18; ry <= 23; ry++) {
-    for (let rx = 75; rx <= 86; rx++) grid[ry][rx] = TileType.EMPTY;
-    grid[ry][74] = TileType.BREAKABLE_ROCK;
-  }
-  grid[23][78] = TileType.GIANT_RING;
-  grid[23][81] = TileType.MONITOR_INVINCIBILITY;
-  grid[23][84] = TileType.RING;
-  grid[23][85] = TileType.RING;
-  grid[24][92] = TileType.BADNIK_CATERKILLER;
-  for (let sx = 94; sx <= 100; sx += 3) grid[24][sx] = TileType.SPIKES_UP;
-  fillRect(grid, 93, 19, 12, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 95; sx <= 101; sx += 3) grid[21][sx] = TileType.SPIKES_DOWN;
+  grid[31][96] = TileType.GIANT_RING;
+  grid[31][100] = TileType.MONITOR_INVINCIBILITY;
+  grid[31][103] = TileType.MONITOR_1UP;
+  grid[31][105] = TileType.RING;
 
-  // Section 3: Crystal Chasm Crossing with Stalactites & Steam Bridge (x 104..176)
-  fillRect(grid, 104, 0, 72, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 104, 28, 72, 4, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
-  for (let px = 108; px <= 172; px += 9) {
-    fillRect(grid, px, 20, 5, 1, TileType.PLATFORM, TileType.PLATFORM);
-    grid[18][px + 2] = TileType.RING;
-  }
-  grid[16][112] = TileType.BADNIK_BATBRAIN;
-  for (let sx = 120; sx <= 160; sx += 8) grid[10][sx] = TileType.GIMMICK_STALACTITE;
-  grid[19][140] = TileType.GIMMICK_DASH_RING;
-  grid[20][156] = TileType.MONITOR_LIGHTNING;
-  grid[24][130] = TileType.CHECKPOINT; // Rest pillar inside the chasm
-  fillRect(grid, 128, 24, 5, 4, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 164, 16, 8, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[15][168] = TileType.GIANT_RING;
+  // Section 3: The Great Stalactite Chasm & Crystal Platforms (x 116..186)
+  fillRect(grid, 116, 0, 70, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 120; sx <= 180; sx += 6) grid[8][sx] = TileType.GIMMICK_STALACTITE;
 
-  // Section 4: Reinforced Drill-Crusher Arena (x 176..240)
-  // Solid cavern roof the drill can burrow up into for its Ceiling Burrow tremors!
-  fillRect(grid, 176, 0, 64, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  fillRect(grid, 176, 21, 64, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[20][179] = TileType.CHECKPOINT;
-  grid[20][182] = TileType.MONITOR_RING;
-  grid[20][186] = TileType.BOOSTER_RIGHT;
-  for (let x = 190; x <= 196; x += 2) grid[19][x] = TileType.RING;
-  grid[20][198] = TileType.CHECKPOINT;
-  // Dodge catwalks under the burrow ceiling
-  fillRect(grid, 187, 16, 7, 1, TileType.PLATFORM, TileType.PLATFORM);
-  fillRect(grid, 213, 16, 7, 1, TileType.PLATFORM, TileType.PLATFORM);
-  grid[15][190] = TileType.RING;
-  grid[15][216] = TileType.RING;
+  // Chasm starting platform
+  fillRect(grid, 116, 21, 10, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[20][118] = TileType.CHECKPOINT;
+  grid[20][121] = TileType.MONITOR_RING;
+  grid[20][124] = TileType.BOOSTER_RIGHT;
 
-  // Egg Drill-Crusher (Act 2 Boss)
-  grid[16][204] = TileType.BOSS_MYSTIC;
+  // Floating platforms across the abyss
+  grid[13][128] = TileType.SWINGING_PLATFORM;
+  fillRect(grid, 134, 15, 10, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[13][136] = TileType.GIMMICK_DASH_RING;
+  grid[14][142] = TileType.SWINGING_PLATFORM;
 
-  grid[20][232] = TileType.GOAL_POST;
+  fillRect(grid, 128, 22, 8, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[21][130] = TileType.BADNIK_CATERKILLER;
+  for (let sx = 132; sx <= 135; sx++) grid[21][sx] = TileType.SPIKES_UP;
+
+  // Rocky overhang with ceiling spikes
+  fillRect(grid, 136, 17, 10, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 138; sx <= 144; sx += 3) grid[19][sx] = TileType.SPIKES_DOWN;
+
+  fillRect(grid, 148, 20, 10, 14, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[18][151] = TileType.BADNIK_BATBRAIN;
+  grid[19][156] = TileType.SPRING_RED;
+
+  // Lower chasm floor with floor spikes and rescue elevator
+  fillRect(grid, 120, 31, 46, 3, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
+  for (let sx = 122; sx <= 162; sx += 3) grid[30][sx] = TileType.SPIKES_UP;
+  grid[28][164] = TileType.MOVING_PLATFORM_VERT;
+  grid[23][164] = TileType.MOVING_PLATFORM_VERT;
+
+  // Far side of the chasm
+  fillRect(grid, 166, 20, 20, 14, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[19][168] = TileType.CHECKPOINT;
+  for (let x = 170; x <= 178; x += 2) grid[18][x] = TileType.RING;
+  grid[19][182] = TileType.MONITOR_FLAME;
+
+  // Section 4: Approach to the Drill-Crusher Arena (x 186..206)
+  fillRect(grid, 186, 0, 20, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 186, 21, 20, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[20][188] = TileType.CHECKPOINT; // Pre-boss checkpoint!
+  grid[20][191] = TileType.MONITOR_RING;
+  grid[20][194] = TileType.BOOSTER_RIGHT;
+  for (let x = 197; x <= 203; x += 2) grid[19][x] = TileType.RING;
+
+  // Section 5: The Master Drill-Crusher Arena (x 206..256)
+  // Reinforced solid rock ceiling for the Egg Drill-Crusher's ceiling burrow tremors!
+  fillRect(grid, 206, 0, 50, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  // Sturdy arena floor (y: 22..33)
+  fillRect(grid, 206, 22, 50, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+
+  // Strategic avoidance catwalks (y: 16): jump here to dodge Drill Charges & Shockwaves!
+  fillRect(grid, 212, 16, 8, 1, TileType.PLATFORM, TileType.PLATFORM);
+  fillRect(grid, 234, 16, 8, 1, TileType.PLATFORM, TileType.PLATFORM);
+  for (let x = 214; x <= 218; x += 2) grid[14][x] = TileType.RING;
+  for (let x = 236; x <= 240; x += 2) grid[14][x] = TileType.RING;
+
+  // Egg Drill-Crusher Boss (Act 2 Boss)
+  grid[18][225] = TileType.BOSS_MYSTIC;
+
+  // Finish goal post
+  grid[21][248] = TileType.GOAL_POST;
 
   return {
     id: 'mystic-caverns-act-2',
@@ -2868,8 +3098,8 @@ function buildMysticCavernsAct2(): LevelData {
     height,
     tilesetId: 'mystic-caverns',
     grid,
-    p1Spawn: { x: 4, y: 23 },
-    p2Spawn: { x: 2, y: 23 },
+    p1Spawn: { x: 4, y: 18 },
+    p2Spawn: { x: 2, y: 18 },
   };
 }
 
@@ -2905,42 +3135,35 @@ export const CAMPAIGN_ORDER: string[] = DEFAULT_LEVELS.map((l) => l.id);
  * through the Active Zone & Act selector.
  */
 export function orderCampaignLevels(list: LevelData[]): LevelData[] {
-  const defaultDeathEgg =
-    DEFAULT_LEVELS.find((l) => l.id === 'death-egg-zone') ||
-    DEFAULT_LEVELS[DEFAULT_LEVELS.length - 2];
-  const defaultBrokenTest = DEFAULT_LEVELS.find((l) => l.id === 'broken-test-01');
-  const foundDeathEgg = list.find((l) => l.id === 'death-egg-zone');
-  const existingDeathEgg =
-    foundDeathEgg && foundDeathEgg.width >= 232 ? foundDeathEgg : defaultDeathEgg;
-  const existingBrokenTest =
-    list.find((l) => l.id === 'broken-test-01') || defaultBrokenTest;
-
+  if (!Array.isArray(list) || list.length === 0) return DEFAULT_LEVELS;
   const byId = new Map(list.map((l) => [l.id, l]));
   const ordered: LevelData[] = [];
   for (const id of CAMPAIGN_ORDER) {
     if (id === 'broken-test-01' || id === 'death-egg-zone') continue;
-    const defaultLevel = DEFAULT_LEVELS.find((d) => d.id === id);
-    // Explicitly replace Mystic Caverns & Chemical Plant with the latest canonical versions
-    const isTargetReplaced =
-      id === 'mystic-caverns-act-1' ||
-      id === 'mystic-caverns-act-2' ||
-      id === 'chemical-plant-act-1' ||
-      id === 'chemical-plant-act-2';
-    const found = isTargetReplaced ? defaultLevel : (byId.get(id) || defaultLevel);
-    if (found) ordered.push(found);
-    byId.delete(id);
+    const found = byId.get(id);
+    if (found) {
+      ordered.push(found);
+      byId.delete(id);
+    }
   }
   const userStages = list.filter(
     (l) =>
       byId.has(l.id) &&
-      l.id !== 'emerald-mountains-act-3' &&
       l.id !== 'death-egg-zone' &&
       l.id !== 'broken-test-01'
   );
 
-  return existingBrokenTest
-    ? [...ordered, ...userStages, existingDeathEgg, existingBrokenTest]
-    : [...ordered, ...userStages, existingDeathEgg];
+  const foundDeathEgg =
+    byId.get('death-egg-zone') ||
+    list.find((l) => l.id === 'death-egg-zone') ||
+    DEFAULT_LEVELS.find((l) => l.id === 'death-egg-zone');
+  const foundBrokenTest =
+    byId.get('broken-test-01') || list.find((l) => l.id === 'broken-test-01');
+
+  const result = [...ordered, ...userStages];
+  if (foundDeathEgg) result.push(foundDeathEgg);
+  if (foundBrokenTest) result.push(foundBrokenTest);
+  return result.length > 0 ? result : DEFAULT_LEVELS;
 }
 
 /**

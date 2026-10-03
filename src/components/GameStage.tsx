@@ -903,7 +903,7 @@ export const GameStage: React.FC<GameStageProps> = ({
                 {levels.map((lvl) => (
                   <option key={lvl.id} value={lvl.id}>
                     {lvl.id === 'broken-test-01'
-                      ? 'Broken Test 01'
+                      ? 'Emerald Heights — Act 3 (Bonus Tower)'
                       : `${lvl.name} — Act ${lvl.act}`}
                   </option>
                 ))}

@@ -217,13 +217,53 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
   const [hoverCell, setHoverCell] = useState<{ col: number; row: number } | null>(null);
   const lastSwipedCellRef = useRef<string | null>(null);
 
+  // Local draft inputs for level width and height so typing does not prematurely crop the level
+  const [draftWidth, setDraftWidth] = useState<string>(String(activeLevel.width));
+  const [draftHeight, setDraftHeight] = useState<string>(String(activeLevel.height));
+
+  useEffect(() => {
+    setDraftWidth(String(activeLevel.width));
+    setDraftHeight(String(activeLevel.height));
+  }, [activeLevel.id, activeLevel.width, activeLevel.height]);
+
   // Sync editor camera to P1 Spawn whenever the user selects a different level (e.g. Act 3 high-Y level!)
   useEffect(() => {
     setCamX(Math.max(240, (activeLevel.p1Spawn?.x || 4) * TILE_SIZE + 160));
     setCamY(Math.max(180, (activeLevel.p1Spawn?.y || 20) * TILE_SIZE - 40));
   }, [activeLevel.id]);
 
-  // Render Loop for Editor Viewport
+  // Stable reference to current editor state for the render loop
+  const stateRef = useRef({
+    activeLevel,
+    activeTileset,
+    camX,
+    camY,
+    cameraZoom,
+    editorLayer,
+    showGrid,
+    hoverCell,
+    toolMode,
+    selectedTile,
+    rectStart,
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      activeLevel,
+      activeTileset,
+      camX,
+      camY,
+      cameraZoom,
+      editorLayer,
+      showGrid,
+      hoverCell,
+      toolMode,
+      selectedTile,
+      rectStart,
+    };
+  });
+
+  // Render Loop for Editor Viewport (runs smoothly at 60fps without resetting tick on mouse moves)
   useEffect(() => {
     let animId = 0;
     let tick = 0;
@@ -234,20 +274,21 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
       if (canvas) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          const effW = Math.round(canvas.width / cameraZoom);
-          const effH = Math.round(canvas.height / cameraZoom);
+          const s = stateRef.current;
+          const effW = Math.round(canvas.width / s.cameraZoom);
+          const effH = Math.round(canvas.height / s.cameraZoom);
 
           ctx.save();
-          ctx.scale(cameraZoom, cameraZoom);
+          ctx.scale(s.cameraZoom, s.cameraZoom);
           renderViewport(
             ctx,
             effW,
             effH,
-            camX,
-            camY,
-            activeLevel,
-            activeLevel.grid,
-            activeTileset,
+            s.camX,
+            s.camY,
+            s.activeLevel,
+            s.activeLevel.grid,
+            s.activeTileset,
             [],
             [],
             [],
@@ -255,36 +296,38 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
             [],
             [],
             tick,
-            showGrid
+            s.showGrid,
+            [],
+            true // isEditor = true ensures all spawns, badniks, and bosses are visible
           );
 
           // Draw Hover Cursor Highlight
-          if (hoverCell) {
-            const camLeft = Math.floor(camX - effW / 2);
-            const camTop = Math.floor(camY - effH / 2);
-            const sx = hoverCell.col * TILE_SIZE - camLeft;
-            const sy = hoverCell.row * TILE_SIZE - camTop;
+          if (s.hoverCell) {
+            const camLeft = Math.floor(s.camX - effW / 2);
+            const camTop = Math.floor(s.camY - effH / 2);
+            const sx = s.hoverCell.col * TILE_SIZE - camLeft;
+            const sy = s.hoverCell.row * TILE_SIZE - camTop;
 
             ctx.save();
             ctx.strokeStyle =
-              toolMode === 'erase'
+              s.toolMode === 'erase'
                 ? '#F43F5E'
-                : editorLayer === 'background'
+                : s.editorLayer === 'background'
                 ? '#A855F7'
                 : '#38BDF8';
             ctx.lineWidth = 2;
-            if (toolMode === 'ground_rect' && rectStart) {
-              const minC = Math.min(rectStart.col, hoverCell.col);
-              const maxC = Math.max(rectStart.col, hoverCell.col);
-              const minR = Math.min(rectStart.row, hoverCell.row);
-              const maxR = Math.max(rectStart.row, hoverCell.row);
+            if (s.toolMode === 'ground_rect' && s.rectStart) {
+              const minC = Math.min(s.rectStart.col, s.hoverCell.col);
+              const maxC = Math.max(s.rectStart.col, s.hoverCell.col);
+              const minR = Math.min(s.rectStart.row, s.hoverCell.row);
+              const maxR = Math.max(s.rectStart.row, s.hoverCell.row);
               ctx.strokeRect(
                 minC * TILE_SIZE - camLeft,
                 minR * TILE_SIZE - camTop,
                 (maxC - minC + 1) * TILE_SIZE,
                 (maxR - minR + 1) * TILE_SIZE
               );
-            } else if (selectedTile === TileType.LOOP_HEAD && toolMode === 'brush') {
+            } else if (s.selectedTile === TileType.LOOP_HEAD && s.toolMode === 'brush') {
               ctx.strokeRect(sx, sy, TILE_SIZE * 6, TILE_SIZE * 6);
             } else {
               ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
@@ -299,19 +342,7 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
 
     animId = requestAnimationFrame(renderLoop);
     return () => cancelAnimationFrame(animId);
-  }, [
-    activeLevel,
-    activeTileset,
-    camX,
-    camY,
-    cameraZoom,
-    editorLayer,
-    showGrid,
-    hoverCell,
-    toolMode,
-    selectedTile,
-    rectStart,
-  ]);
+  }, []);
 
   // Keyboard Arrow/WASD camera panning inside editor
   useEffect(() => {
@@ -381,15 +412,21 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
             Array(activeLevel.width).fill(TileType.EMPTY)
           )
     );
-    let nextP1 = { ...activeLevel.p1Spawn };
-    let nextP2 = { ...activeLevel.p2Spawn };
+    let nextP1 = activeLevel.p1Spawn ? { ...activeLevel.p1Spawn } : { x: 4, y: 20 };
+    let nextP2 = activeLevel.p2Spawn ? { ...activeLevel.p2Spawn } : { x: 2, y: 20 };
 
     const setCell = (c: number, r: number, t: TileType) => {
       if (r >= 0 && r < activeLevel.height && c >= 0 && c < activeLevel.width) {
         if (isBgEdit) {
-          nextBgGrid[r][c] = t;
+          while (nextBgGrid.length <= r) {
+            nextBgGrid.push(Array(activeLevel.width).fill(TileType.EMPTY));
+          }
+          if (nextBgGrid[r]) nextBgGrid[r][c] = t;
         } else {
-          nextGrid[r][c] = t;
+          while (nextGrid.length <= r) {
+            nextGrid.push(Array(activeLevel.width).fill(TileType.EMPTY));
+          }
+          if (nextGrid[r]) nextGrid[r][c] = t;
         }
       }
     };
@@ -546,16 +583,26 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
               )
         );
         for (let r = minR; r <= maxR; r++) {
+          while (nextBgGrid.length <= r) {
+            nextBgGrid.push(Array(activeLevel.width).fill(TileType.EMPTY));
+          }
           for (let c = minC; c <= maxC; c++) {
-            nextBgGrid[r][c] = selectedTile || TileType.BG_BRICK;
+            if (nextBgGrid[r] && c < activeLevel.width) {
+              nextBgGrid[r][c] = selectedTile || TileType.BG_BRICK;
+            }
           }
         }
         onUpdateLevel({ ...activeLevel, bgGrid: nextBgGrid });
       } else {
         const nextGrid = activeLevel.grid.map((r) => [...r]);
         for (let r = minR; r <= maxR; r++) {
+          while (nextGrid.length <= r) {
+            nextGrid.push(Array(activeLevel.width).fill(TileType.EMPTY));
+          }
           for (let c = minC; c <= maxC; c++) {
-            nextGrid[r][c] = r === minR ? TileType.GROUND_TOP : TileType.GROUND_DEEP;
+            if (nextGrid[r] && c < activeLevel.width) {
+              nextGrid[r][c] = r === minR ? TileType.GROUND_TOP : TileType.GROUND_DEEP;
+            }
           }
         }
         onUpdateLevel({ ...activeLevel, grid: nextGrid });
@@ -566,6 +613,22 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
     setIsPanning(false);
     lastSwipedCellRef.current = null;
   };
+
+  // Window-level release listener ensures dragging and panning stop even if released outside canvas
+  useEffect(() => {
+    const handleGlobalRelease = () => {
+      setIsDraggingPaint(false);
+      setIsPanning(false);
+      lastSwipedCellRef.current = null;
+      setRectStart(null);
+    };
+    window.addEventListener('mouseup', handleGlobalRelease);
+    window.addEventListener('touchend', handleGlobalRelease);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalRelease);
+      window.removeEventListener('touchend', handleGlobalRelease);
+    };
+  }, []);
 
   // Mobile Touch Support: Swipe-to-Place Mode & Touch Camera Panning!
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
@@ -629,7 +692,7 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
   const jumpCameraToGoal = () => {
     for (let r = 0; r < activeLevel.height; r++) {
       for (let c = 0; c < activeLevel.width; c++) {
-        if (activeLevel.grid[r][c] === TileType.GOAL_POST) {
+        if (activeLevel.grid[r]?.[c] === TileType.GOAL_POST) {
           setCamX(Math.max(200, c * TILE_SIZE));
           setCamY(Math.max(160, r * TILE_SIZE - 40));
           return;
@@ -675,7 +738,11 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
 
     const nextGrid: number[][] = Array.from({ length: clampedH }, (_, r) =>
       Array.from({ length: clampedW }, (__, c) => {
-        if (r < activeLevel.height && c < activeLevel.width) {
+        if (
+          r < activeLevel.grid.length &&
+          activeLevel.grid[r] &&
+          c < activeLevel.grid[r].length
+        ) {
           return activeLevel.grid[r][c];
         }
         return TileType.EMPTY;
@@ -687,6 +754,7 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
         if (
           activeLevel.bgGrid &&
           r < activeLevel.bgGrid.length &&
+          activeLevel.bgGrid[r] &&
           c < (activeLevel.bgGrid[r]?.length || 0)
         ) {
           return activeLevel.bgGrid[r][c];
@@ -749,19 +817,13 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
                 onChange={(e) => onSelectLevel(e.target.value)}
                 className="w-full px-2.5 py-1.5 text-xs bg-[#0B0F19] border border-slate-800 rounded-lg text-white focus:outline-none focus:border-blue-500"
               >
-                {levels
-                  .filter(
-                    (lvl) =>
-                      lvl.id !== 'broken-test-01' ||
-                      activeLevel.id === 'broken-test-01'
-                  )
-                  .map((lvl) => (
-                    <option key={lvl.id} value={lvl.id}>
-                      {lvl.id === 'broken-test-01'
-                        ? 'Broken Test 01'
-                        : `${lvl.name} — Act ${lvl.act}`}
-                    </option>
-                  ))}
+                {levels.map((lvl) => (
+                  <option key={lvl.id} value={lvl.id}>
+                    {lvl.id === 'broken-test-01'
+                      ? 'Emerald Heights — Act 3 (Bonus Tower)'
+                      : `${lvl.name} — Act ${lvl.act}`}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -837,10 +899,26 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
                     min={64}
                     max={640}
                     step={16}
-                    value={activeLevel.width}
-                    onChange={(e) =>
-                      handleResizeLevel(Number(e.target.value) || activeLevel.width, activeLevel.height)
-                    }
+                    value={draftWidth}
+                    onChange={(e) => setDraftWidth(e.target.value)}
+                    onBlur={() => {
+                      const parsed = parseInt(draftWidth, 10);
+                      if (!Number.isNaN(parsed) && parsed >= 64) {
+                        handleResizeLevel(parsed, activeLevel.height);
+                      } else {
+                        setDraftWidth(String(activeLevel.width));
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const parsed = parseInt(draftWidth, 10);
+                        if (!Number.isNaN(parsed) && parsed >= 64) {
+                          handleResizeLevel(parsed, activeLevel.height);
+                        } else {
+                          setDraftWidth(String(activeLevel.width));
+                        }
+                      }
+                    }}
                     className="w-full px-2 py-1 text-xs text-center font-mono bg-[#0B0F19] border border-slate-800 rounded text-white"
                   />
                   <button
@@ -883,10 +961,26 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
                     min={24}
                     max={255}
                     step={1}
-                    value={activeLevel.height}
-                    onChange={(e) =>
-                      handleResizeLevel(activeLevel.width, Number(e.target.value) || activeLevel.height)
-                    }
+                    value={draftHeight}
+                    onChange={(e) => setDraftHeight(e.target.value)}
+                    onBlur={() => {
+                      const parsed = parseInt(draftHeight, 10);
+                      if (!Number.isNaN(parsed) && parsed >= 24) {
+                        handleResizeLevel(activeLevel.width, parsed);
+                      } else {
+                        setDraftHeight(String(activeLevel.height));
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const parsed = parseInt(draftHeight, 10);
+                        if (!Number.isNaN(parsed) && parsed >= 24) {
+                          handleResizeLevel(activeLevel.width, parsed);
+                        } else {
+                          setDraftHeight(String(activeLevel.height));
+                        }
+                      }
+                    }}
                     className="w-full px-2 py-1 text-xs text-center font-mono bg-[#0B0F19] border border-slate-800 rounded text-white"
                   />
                   <button
@@ -1299,8 +1393,10 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
             </span>
             <button
               onClick={() => {
-                setCamX(Math.max(200, activeLevel.p1Spawn.x * TILE_SIZE + 120));
-                setCamY(Math.max(160, activeLevel.p1Spawn.y * TILE_SIZE - 32));
+                const px = activeLevel.p1Spawn?.x ?? 4;
+                const py = activeLevel.p1Spawn?.y ?? 20;
+                setCamX(Math.max(200, px * TILE_SIZE + 120));
+                setCamY(Math.max(160, py * TILE_SIZE - 32));
               }}
               className="px-2.5 py-1 bg-[#0B0F19] hover:bg-slate-800 border border-slate-700 rounded-md text-slate-200 cursor-pointer"
             >
@@ -1388,6 +1484,12 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             onTouchCancel={handleTouchEnd}
+            onMouseLeave={() => {
+              setHoverCell(null);
+              setIsDraggingPaint(false);
+              setIsPanning(false);
+              lastSwipedCellRef.current = null;
+            }}
             onContextMenu={(e) => e.preventDefault()}
             className={`w-full h-auto block select-none touch-none ${
               toolMode === 'pan_camera' ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'

@@ -57,6 +57,8 @@ const TILE_TO_TEXTURE_KEY: Partial<Record<TileType, EditableTextureKey>> = {
   [TileType.GIMMICK_STEAM_VENT]: 'steamVent',
   [TileType.GIMMICK_TUBE_ENTRY]: 'tubeEntry',
   [TileType.GIMMICK_TUBE_EXIT]: 'tubeExit',
+  [TileType.BOSS_CHEMICAL]: 'bossChemical',
+  [TileType.BOSS_MYSTIC]: 'bossMystic',
   [TileType.RING]: 'ring',
   [TileType.GIANT_RING]: 'giantRing',
   [TileType.MONITOR_RING]: 'monitorRing',
@@ -180,7 +182,8 @@ export function renderViewport(
   particles: ParticleFX[],
   globalTick: number,
   showEditorGrid: boolean = false,
-  hazards: ActiveHazard[] = []
+  hazards: ActiveHazard[] = [],
+  isEditor: boolean = false
 ) {
   ctx.save();
 
@@ -369,19 +372,27 @@ export function renderViewport(
   const camTop = Math.floor(camCenterY - viewHeight / 2);
   ctx.translate(-camLeft, -camTop);
 
+  const gridRows = workingGrid.length;
+  const startRow = Math.max(0, Math.floor(camTop / TILE_SIZE) - 6);
+  const endRow = Math.min(
+    gridRows - 1,
+    Math.min(level.height - 1, Math.ceil((camTop + viewHeight) / TILE_SIZE) + 6)
+  );
   const startCol = Math.max(0, Math.floor(camLeft / TILE_SIZE) - 6);
   const endCol = Math.min(level.width - 1, Math.ceil((camLeft + viewWidth) / TILE_SIZE) + 6);
-  const startRow = Math.max(0, Math.floor(camTop / TILE_SIZE) - 6);
-  const endRow = Math.min(level.height - 1, Math.ceil((camTop + viewHeight) / TILE_SIZE) + 6);
 
   const customTextures = getOrBuildTileTextures(tileset);
   const uploadedSheet = getUploadedSheetImage(tileset.uploadedSheetDataUrl);
 
   // 2. Render Background Decorative Scenery
   for (let r = startRow; r <= endRow; r++) {
-    for (let c = startCol; c <= endCol; c++) {
-      if (workingGrid[r][c] === TileType.GROUND_TOP && c % 9 === 3 && r > 3) {
-        if (workingGrid[r - 1][c] === TileType.EMPTY) {
+    const row = workingGrid[r];
+    if (!row) continue;
+    const prevRow = workingGrid[r - 1];
+    const rowEndCol = Math.min(row.length - 1, endCol);
+    for (let c = startCol; c <= rowEndCol; c++) {
+      if (row[c] === TileType.GROUND_TOP && c % 9 === 3 && r > 3) {
+        if (prevRow && prevRow[c] === TileType.EMPTY) {
           drawZoneDecoration(ctx, c * TILE_SIZE + 16, r * TILE_SIZE, tileset, globalTick);
         }
       }
@@ -391,11 +402,15 @@ export function renderViewport(
   // 2B. Render Background Tiles (both level.bgGrid Layer AND pass-through BG_* tiles in workingGrid) BEHIND everything!
   const anyBossAlive = bosses.some((b) => b.alive);
   if (level.bgGrid) {
+    const showSpawnMarkers = isEditor || players.length === 0;
     ctx.save();
     for (let r = startRow; r <= endRow; r++) {
-      for (let c = startCol; c <= endCol; c++) {
-        const bgTile = (level.bgGrid[r]?.[c] ?? TileType.EMPTY) as TileType;
-        if (bgTile === TileType.EMPTY) continue;
+      const bgRow = level.bgGrid[r];
+      if (!bgRow) continue;
+      const bgRowEndCol = Math.min(bgRow.length - 1, endCol);
+      for (let c = startCol; c <= bgRowEndCol; c++) {
+        const bgTile = bgRow[c] as TileType;
+        if (!bgTile) continue;
         const wx = c * TILE_SIZE;
         const wy = r * TILE_SIZE;
         drawTile(
@@ -407,7 +422,7 @@ export function renderViewport(
           customTextures,
           uploadedSheet,
           globalTick,
-          showEditorGrid,
+          showSpawnMarkers,
           anyBossAlive
         );
         // Subtle background depth shading so foreground objects pop clearly in front of background layer tiles!
@@ -421,10 +436,14 @@ export function renderViewport(
   }
 
   // Also draw any BG_* or DECO_WATERFALL tiles placed directly in workingGrid behind foreground tiles & entities!
+  const showSpawnMarkers = isEditor || players.length === 0;
   for (let r = startRow; r <= endRow; r++) {
-    for (let c = startCol; c <= endCol; c++) {
-      const tile = workingGrid[r][c] as TileType;
-      if (!isBackgroundTile(tile)) continue;
+    const row = workingGrid[r];
+    if (!row) continue;
+    const rowEndCol = Math.min(row.length - 1, endCol);
+    for (let c = startCol; c <= rowEndCol; c++) {
+      const tile = row[c] as TileType;
+      if (!tile || !isBackgroundTile(tile)) continue;
       drawTile(
         ctx,
         tile,
@@ -434,7 +453,7 @@ export function renderViewport(
         customTextures,
         uploadedSheet,
         globalTick,
-        showEditorGrid,
+        showSpawnMarkers,
         anyBossAlive
       );
     }
@@ -442,9 +461,12 @@ export function renderViewport(
 
   // 3. Render Foreground Level Tiles, Moving/Swinging Platforms & Redone 360° Loops
   for (let r = startRow; r <= endRow; r++) {
-    for (let c = startCol; c <= endCol; c++) {
-      const tile = workingGrid[r][c] as TileType;
-      if (tile === TileType.EMPTY || isBackgroundTile(tile)) continue;
+    const row = workingGrid[r];
+    if (!row) continue;
+    const rowEndCol = Math.min(row.length - 1, endCol);
+    for (let c = startCol; c <= rowEndCol; c++) {
+      const tile = row[c] as TileType;
+      if (!tile || isBackgroundTile(tile)) continue;
       const wx = c * TILE_SIZE;
       const wy = r * TILE_SIZE;
 
@@ -457,7 +479,7 @@ export function renderViewport(
         customTextures,
         uploadedSheet,
         globalTick,
-        showEditorGrid,
+        showSpawnMarkers,
         anyBossAlive
       );
     }
@@ -870,6 +892,8 @@ function drawTile(
     tile !== TileType.MOVING_PLATFORM_VERT &&
     tile !== TileType.SWINGING_PLATFORM &&
     tile !== TileType.MONITOR_1UP &&
+    tile !== TileType.BOSS_CHEMICAL &&
+    tile !== TileType.BOSS_MYSTIC &&
     customTextures[mappedTexKey]
   ) {
     ctx.drawImage(customTextures[mappedTexKey], wx, wy);
@@ -1984,6 +2008,8 @@ function drawTile(
     case TileType.BOSS_MARBLE:
     case TileType.BOSS_STARLIGHT:
     case TileType.BOSS_HILLTOP:
+    case TileType.BOSS_CHEMICAL:
+    case TileType.BOSS_MYSTIC:
     case TileType.BOSS_SILVER_SONIC:
     case TileType.BOSS_DEATH_EGG_ROBOT: {
       if (showSpawnMarkers) {
@@ -1998,6 +2024,10 @@ function drawTile(
                 ? 'starlight'
                 : tile === TileType.BOSS_HILLTOP
                 ? 'hilltop'
+                : tile === TileType.BOSS_CHEMICAL
+                ? 'chemical'
+                : tile === TileType.BOSS_MYSTIC
+                ? 'mystic'
                 : tile === TileType.BOSS_SILVER_SONIC
                 ? 'silversonic'
                 : tile === TileType.BOSS_DEATH_EGG_ROBOT
@@ -2013,14 +2043,18 @@ function drawTile(
             vx: 0,
             vy: 0,
             facing: -1,
-            hp: tile === TileType.BOSS_DEATH_EGG_ROBOT ? 24 : 8,
-            maxHp: tile === TileType.BOSS_DEATH_EGG_ROBOT ? 24 : 8,
+            hp: tile === TileType.BOSS_DEATH_EGG_ROBOT ? 24 : tile === TileType.BOSS_CHEMICAL || tile === TileType.BOSS_MYSTIC ? 10 : 8,
+            maxHp: tile === TileType.BOSS_DEATH_EGG_ROBOT ? 24 : tile === TileType.BOSS_CHEMICAL || tile === TileType.BOSS_MYSTIC ? 10 : 8,
             invulnTimer: 0,
             ballSwingAngle: 0.4,
             attackTimer: tick,
             alive: true,
+            drillSpinning: false,
+            mechPhase: tile === TileType.BOSS_CHEMICAL ? 'mech_advance' : 'drill_rev',
+            mechFloorY: wy + 96,
           },
-          tick
+          tick,
+          customTextures
         );
       }
       break;
@@ -2219,24 +2253,34 @@ function drawEggmanBoss(
 
   // ==========================================================================
   // NEW MECHA BOSS 2: EGG DRILL-CRUSHER (Mystic Caverns)
+  // Heavy caterpillar tank treads, purple rough-rock armor, diamond spiral drill
   // ==========================================================================
   if (boss.bossType === 'mystic') {
     const phase = boss.mechPhase || 'drill_rev';
     const stunned = phase === 'wall_crash_stun' && (boss.stunFrames || 0) > 0;
     const burrowing = Boolean(boss.ceilingBurrow);
+    const charging = phase === 'drill_charge';
 
     ctx.translate(boss.x, boss.y);
 
-    // Floating Boss Health Bar
-    ctx.fillStyle = '#090D16';
-    ctx.fillRect(-30, -50, 60, 7);
-    ctx.fillStyle = '#A855F7';
-    ctx.fillRect(-29, -49, Math.round(58 * (boss.hp / boss.maxHp)), 5);
+    // Floating Boss Health Bar with amethyst gemstone border
+    ctx.fillStyle = '#0F051D';
+    ctx.fillRect(-32, -54, 64, 8);
+    ctx.strokeStyle = '#2E0A4E';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-32.5, -54.5, 65, 9);
+    const hpRatio = Math.max(0, boss.hp / boss.maxHp);
+    const barGrad = ctx.createLinearGradient(-31, -53, 31, -53);
+    barGrad.addColorStop(0, '#7E22CE');
+    barGrad.addColorStop(0.5, '#A855F7');
+    barGrad.addColorStop(1, '#C084FC');
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(-31, -53, Math.round(62 * hpRatio), 6);
 
     if (boss.invulnTimer > 0 && Math.floor(boss.invulnTimer / 2) % 2 === 0) {
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(0, 0, 30, 0, Math.PI * 2);
+      ctx.arc(0, 0, 32, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       return;
@@ -2246,112 +2290,333 @@ function drawEggmanBoss(
 
     // Optional custom chassis plate from the Tileset Studio boss slot
     if (customTextures?.bossMystic) {
-      ctx.drawImage(customTextures.bossMystic, -24, -24, 48, 48);
+      ctx.drawImage(customTextures.bossMystic, -26, -26, 52, 52);
     }
 
-    // Rock tremor dust while burrowing through the ceiling
+    // Ceiling burrow tremor stone debris falling around the chassis
     if (burrowing) {
-      ctx.fillStyle = 'rgba(168, 85, 247, 0.5)';
-      for (let d = 0; d < 4; d++) {
+      ctx.fillStyle = 'rgba(192, 132, 252, 0.65)';
+      for (let d = 0; d < 6; d++) {
+        const bx = -28 + d * 11;
+        const by = -30 - ((tick * 2.4 + d * 8) % 28);
         ctx.beginPath();
-        ctx.arc(-24 + d * 16, -26 - ((tick * 2 + d * 9) % 24), 6, 0, Math.PI * 2);
+        ctx.arc(bx, by, 3 + (d % 3), 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // Heavy tracked treads
-    ctx.fillStyle = '#1E293B';
-    ctx.beginPath();
-    ctx.roundRect(-32, 12, 64, 16, 7);
-    ctx.fill();
-    ctx.strokeStyle = '#64748B';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = '#475569';
-    for (let w = -26; w <= 24; w += 10) {
-      ctx.beginPath();
-      ctx.arc(w, 20, 5, 0, Math.PI * 2);
-      ctx.fill();
+    // 1. REAR TWIN EXHAUST STACKS
+    for (const exY of [-8, 2]) {
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(-36, exY - 3, 10, 6);
+      ctx.fillStyle = '#64748B';
+      ctx.fillRect(-38, exY - 4, 3, 8);
+      // Animated exhaust smoke and backfire sparks
+      if (charging || phase === 'drill_rev') {
+        const puff = (tick * 2.8 + exY * 7) % 24;
+        ctx.fillStyle = tick % 4 < 2 ? '#22D3EE' : '#C084FC';
+        ctx.beginPath();
+        ctx.arc(-42 - puff, exY + (Math.sin(tick * 0.4) * 3), 3 + puff * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    // Purple hull with cyan trim
-    ctx.fillStyle = '#6B21A8';
+    // 2. HEAVY INDUSTRIAL CATERPILLAR TANK TREADS
+    ctx.save();
+    // Tread frame & armored mudguard
+    ctx.fillStyle = '#0F172A';
     ctx.beginPath();
-    ctx.roundRect(-28, -24, 56, 38, 12);
+    ctx.roundRect(-36, 12, 72, 18, 8);
     ctx.fill();
-    ctx.strokeStyle = '#22D3EE';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
-    ctx.fillStyle = '#4C1D95';
-    ctx.fillRect(-22, -6, 44, 10);
-    ctx.fillStyle = '#C084FC';
-    ctx.fillRect(-20, -4, 40, 3);
-
-    // Cockpit dome (opens while the engine is stalled after the wall crash!)
-    ctx.fillStyle = stunned ? '#0F172A' : '#A5B4FC';
-    ctx.beginPath();
-    ctx.arc(0, -22, 14, Math.PI, 0);
-    ctx.fill();
-    ctx.strokeStyle = stunned ? '#FACC15' : '#818CF8';
+    ctx.strokeStyle = '#334155';
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Road wheels (4 large sprocketed wheels)
+    for (let i = 0; i < 4; i++) {
+      const wx = -26 + i * 17;
+      const wy = 21;
+      // Wheel rim
+      ctx.fillStyle = '#1E293B';
+      ctx.beginPath();
+      ctx.arc(wx, wy, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#64748B';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Chrome center hub
+      ctx.fillStyle = '#CBD5E1';
+      ctx.beginPath();
+      ctx.arc(wx, wy, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Rotating wheel spokes
+      const spokeAngle = (charging ? tick * 0.45 : tick * 0.15);
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(wx + Math.cos(spokeAngle) * 6, wy + Math.sin(spokeAngle) * 6);
+      ctx.lineTo(wx - Math.cos(spokeAngle) * 6, wy - Math.sin(spokeAngle) * 6);
+      ctx.stroke();
+    }
+
+    // Moving caterpillar tread teeth (animated)
+    const treadScroll = (tick * 0.8) % 10;
+    ctx.fillStyle = '#475569';
+    for (let tx = -34 + treadScroll; tx < 34; tx += 8) {
+      ctx.fillRect(tx, 29, 4, 3);
+      ctx.fillRect(tx, 11, 4, 2);
+    }
+    // Heavy front and rear mudguard armor plates with rivets
+    ctx.fillStyle = '#2E0A4E';
+    ctx.fillRect(-37, 10, 8, 8);
+    ctx.fillRect(29, 10, 8, 8);
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(-35, 12, 2, 2);
+    ctx.fillRect(33, 12, 2, 2);
+    ctx.restore();
+
+    // Ground contact friction sparks while charging across the stone
+    if (charging && Math.random() < 0.7) {
+      ctx.fillStyle = '#22D3EE';
+      ctx.fillRect(-20 + Math.random() * 40, 31, 3, 3);
+    }
+
+    // 3. REINFORCED PURPLE ROUGH-ROCK PLATED CHASSIS
+    // Angled rough obsidian-purple rock hull
+    ctx.fillStyle = '#4A156D';
+    ctx.beginPath();
+    ctx.moveTo(-32, 12);
+    ctx.lineTo(-28, -14);
+    ctx.lineTo(-8, -20);
+    ctx.lineTo(18, -20);
+    ctx.lineTo(26, -6);
+    ctx.lineTo(28, 12);
+    ctx.closePath();
+    ctx.fill();
+
+    // Front rough purple rock breastplate with chiseled stone facets
+    ctx.fillStyle = '#6B21A8';
+    ctx.beginPath();
+    ctx.moveTo(-26, 10);
+    ctx.lineTo(-22, -10);
+    ctx.lineTo(14, -10);
+    ctx.lineTo(22, 10);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stone facet highlight ridges
+    ctx.strokeStyle = '#9333EA';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-22, -10);
+    ctx.lineTo(14, -10);
+    ctx.lineTo(22, 10);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#C084FC';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-22, -10);
+    ctx.lineTo(-5, 0);
+    ctx.lineTo(14, -10);
+    ctx.stroke();
+
+    // Cyan glowing energy power conduits along the hull
+    ctx.fillStyle = '#22D3EE';
+    ctx.fillRect(-20, 0, 36, 3);
+    ctx.fillStyle = '#67E8F9';
+    ctx.fillRect(-18, 0, 32, 1.5);
+
+    // Heavy industrial steel rivets
+    ctx.fillStyle = '#F8FAFC';
+    ctx.fillRect(-24, 7, 2.5, 2.5);
+    ctx.fillRect(-20, -7, 2.5, 2.5);
+    ctx.fillRect(10, -7, 2.5, 2.5);
+    ctx.fillRect(18, 7, 2.5, 2.5);
+
+    // 4. COCKPIT CANOPY & ANIMATED DR. EGGMAN
+    ctx.save();
     if (stunned) {
-      // Jammed engine sparks & exposed pilot seat
-      ctx.fillStyle = tick % 8 < 4 ? '#FACC15' : '#EF4444';
+      // POPPED-OPEN CANOPY (engine stalled & smoking after wall impact!)
+      // Canopy frame angled back on hydraulic arms
+      ctx.fillStyle = '#1E293B';
+      ctx.beginPath();
+      ctx.moveTo(-16, -20);
+      ctx.lineTo(-8, -38);
+      ctx.lineTo(12, -34);
+      ctx.lineTo(6, -20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#22D3EE';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Exposed smoking engine bay & shorted circuits
+      ctx.fillStyle = '#090D16';
+      ctx.fillRect(-12, -22, 20, 10);
+      ctx.fillStyle = '#DC2626';
+      ctx.fillRect(-8, -19, 6, 5);
+      // Engine smoke clouds & fire sparks
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+      ctx.beginPath();
+      ctx.arc(-2, -26, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.7)';
+      ctx.beginPath();
+      ctx.arc(-4, -32 - (tick % 8), 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Dazed Dr. Eggman clutching head
+      ctx.fillStyle = '#DC2626'; // Red jacket
+      ctx.fillRect(-5, -20, 10, 6);
+      ctx.fillStyle = '#FDBA74'; // Face
+      ctx.beginPath();
+      ctx.arc(0, -22, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#B45309'; // Mustache
+      ctx.fillRect(-4, -20, 8, 3);
+      // Dizzy cartoon stars & electric sparks circling his head!
+      const starAng = tick * 0.22;
+      ctx.fillStyle = '#FACC15';
+      for (let s = 0; s < 3; s++) {
+        const ang = starAng + (s * Math.PI * 2) / 3;
+        const sx = Math.cos(ang) * 14;
+        const sy = -28 + Math.sin(ang) * 6;
+        ctx.fillRect(sx - 2, sy - 2, 4, 4);
+      }
+    } else {
+      // SEALED ARMORED CANOPY with cyan energy glass
+      ctx.fillStyle = '#0F172A';
+      ctx.beginPath();
+      ctx.arc(0, -18, 14, Math.PI, 0);
+      ctx.fill();
+
+      // Dr. Eggman animated inside
+      ctx.fillStyle = '#DC2626';
+      ctx.fillRect(-6, -18, 12, 6);
+      ctx.fillStyle = '#FDBA74';
       ctx.beginPath();
       ctx.arc(0, -20, 5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#F8FAFC';
-      ctx.fillRect(-2, -30, 4, 10);
+      ctx.fillStyle = '#B45309'; // Mustache
+      ctx.fillRect(-5, -18, 10, 2.5);
+      ctx.fillStyle = '#0F172A'; // Goggles
+      ctx.fillRect(-4, -22, 8, 3);
       ctx.fillStyle = '#22D3EE';
-      for (let s = 0; s < 3; s++) {
-        ctx.fillRect(-16 + s * 14, -34 - (tick % 6), 3, 3);
-      }
-    } else {
-      // Dr. Eggman silhouette inside
-      ctx.fillStyle = '#090D16';
-      ctx.beginPath();
-      ctx.arc(0, -22, 7, Math.PI, 0);
-      ctx.fill();
-    }
+      ctx.fillRect(-3, -22, 2, 2);
+      ctx.fillRect(1, -22, 2, 2);
 
-    // Rotating conical drill bit (jammed & tilted sideways while stunned)
-    ctx.save();
-    ctx.translate(26, -2);
-    if (stunned) {
-      ctx.rotate(0.42);
-    } else if (boss.drillSpinning !== false) {
-      ctx.rotate(tick * 0.55);
-    }
-    ctx.fillStyle = '#94A3B8';
-    ctx.beginPath();
-    ctx.moveTo(0, -11);
-    ctx.lineTo(26, 0);
-    ctx.lineTo(0, 11);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#475569';
-    for (let g = 0; g < 3; g++) {
+      // Cyan tinted energy glass canopy
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.4)';
       ctx.beginPath();
-      ctx.moveTo(4 + g * 7, -10 + g * 3);
-      ctx.lineTo(12 + g * 7, 0);
-      ctx.lineTo(4 + g * 7, 10 - g * 3);
-      ctx.closePath();
+      ctx.arc(0, -18, 14, Math.PI, 0);
       ctx.fill();
+      ctx.strokeStyle = '#22D3EE';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Glass specular reflection glint
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, -18, 11, Math.PI * 1.15, Math.PI * 1.55);
+      ctx.stroke();
     }
-    ctx.strokeStyle = '#22D3EE';
-    ctx.lineWidth = 2;
-    ctx.stroke();
     ctx.restore();
 
-    // Drill tail exhaust
-    ctx.fillStyle = tick % 6 < 3 ? '#22D3EE' : '#7E22CE';
+    // 5. MASSIVE ROTATING SPIRAL DIAMOND DRILL
+    ctx.save();
+    ctx.translate(24, 0);
+
+    // If stunned, the drill is crooked, jammed into the wall, and arcing with electricity!
+    if (stunned) {
+      ctx.rotate(0.38);
+    } else if (boss.drillSpinning !== false) {
+      const rotSpeed = charging ? tick * 1.4 : tick * 0.65;
+      ctx.rotate(Math.sin(rotSpeed) * 0.08);
+    }
+
+    // Heavy industrial mounting collar with drive teeth
+    ctx.fillStyle = '#1E293B';
+    ctx.fillRect(0, -14, 8, 28);
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(2, -12, 4, 24);
+    ctx.fillStyle = '#22D3EE';
+    ctx.fillRect(6, -8, 2, 16);
+
+    // Multi-tier tapered conical drill bit
+    const drillLen = 34;
+    const drillH = 14;
+
+    // Outer carbide cone silhouette
+    ctx.fillStyle = '#475569';
     ctx.beginPath();
-    ctx.moveTo(-30, -6);
-    ctx.lineTo(-42 - (tick % 5), 0);
-    ctx.lineTo(-30, 6);
+    ctx.moveTo(8, -drillH);
+    ctx.lineTo(8 + drillLen, 0);
+    ctx.lineTo(8, drillH);
     ctx.closePath();
     ctx.fill();
+
+    // Rotating spiral chrome cutting flutes
+    const spinPhase = (stunned ? 0.5 : charging ? (tick * 0.4) % 1 : (tick * 0.18) % 1);
+    for (let f = 0; f < 3; f++) {
+      const flutePos = ((f * 0.33 + spinPhase) % 1);
+      const fx = 8 + flutePos * (drillLen - 6);
+      const fyTop = -(drillH * (1 - flutePos * 0.85));
+      const fyBot = (drillH * (1 - flutePos * 0.85));
+
+      // Chrome metallic highlight flute
+      ctx.fillStyle = f % 2 === 0 ? '#F1F5F9' : '#CBD5E1';
+      ctx.beginPath();
+      ctx.moveTo(fx, fyTop);
+      ctx.lineTo(fx + 6, fyTop + 3);
+      ctx.lineTo(fx + 2, fyBot);
+      ctx.lineTo(fx - 4, fyBot - 3);
+      ctx.closePath();
+      ctx.fill();
+
+      // Diamond cutting tooth edges
+      ctx.fillStyle = '#22D3EE';
+      ctx.fillRect(fx + 1, fyTop + 1, 2, 2);
+      ctx.fillRect(fx - 1, fyBot - 3, 2, 2);
+    }
+
+    // Tapered drill center chrome ridge
+    ctx.strokeStyle = '#E2E8F0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.lineTo(8 + drillLen - 2, 0);
+    ctx.stroke();
+
+    // Glowing cyan diamond power core in the drill tip
+    ctx.fillStyle = '#22D3EE';
+    ctx.beginPath();
+    ctx.arc(8 + drillLen, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#67E8F9';
+    ctx.beginPath();
+    ctx.arc(8 + drillLen, 0, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Electric arcs jump from the drill bit when jammed into the wall!
+    if (stunned && tick % 6 < 4) {
+      ctx.strokeStyle = tick % 4 < 2 ? '#22D3EE' : '#FACC15';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(8 + drillLen, 0);
+      ctx.lineTo(8 + drillLen + 6, -4);
+      ctx.lineTo(8 + drillLen + 10, 2);
+      ctx.stroke();
+    }
+
+    // Heat friction sparks flying from drill tip while charging
+    if (charging && Math.random() < 0.85) {
+      ctx.fillStyle = Math.random() < 0.5 ? '#22D3EE' : '#FACC15';
+      ctx.fillRect(8 + drillLen + (Math.random() - 0.2) * 12, (Math.random() - 0.5) * 10, 3, 3);
+    }
+
+    ctx.restore();
 
     ctx.restore();
     return;
