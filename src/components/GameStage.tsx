@@ -90,7 +90,16 @@ interface HudTelemetry {
   p2Progress: number;
   bossHp: number | null;
   bossMaxHp: number | null;
-  bossType: 'eggman' | 'marble' | 'starlight' | 'hilltop' | 'silversonic' | 'deathegg' | null;
+  bossType:
+    | 'eggman'
+    | 'marble'
+    | 'starlight'
+    | 'hilltop'
+    | 'chemical'
+    | 'mystic'
+    | 'silversonic'
+    | 'deathegg'
+    | null;
   elapsedMs: number;
   actCleared: boolean;
   gameOver: boolean;
@@ -346,6 +355,7 @@ export const GameStage: React.FC<GameStageProps> = ({
       projectiles: [],
       scatteredRings: [],
       particles: [],
+      hazards: [],
       players: [p1, p2],
       allEmeraldsCollected,
       allSuperEmeraldsCollected,
@@ -589,7 +599,9 @@ export const GameStage: React.FC<GameStageProps> = ({
                 stepCtx.projectiles,
                 stepCtx.scatteredRings,
                 stepCtx.particles,
-                tick
+                tick,
+                false,
+                stepCtx.hazards
               );
               drawCanvasLifeBadge(
                 ctx,
@@ -621,7 +633,9 @@ export const GameStage: React.FC<GameStageProps> = ({
                 stepCtx.projectiles,
                 stepCtx.scatteredRings,
                 stepCtx.particles,
-                tick
+                tick,
+                false,
+                stepCtx.hazards
               );
               drawViewportCornerLabel(
                 ctx,
@@ -652,7 +666,9 @@ export const GameStage: React.FC<GameStageProps> = ({
                 stepCtx.projectiles,
                 stepCtx.scatteredRings,
                 stepCtx.particles,
-                tick
+                tick,
+                false,
+                stepCtx.hazards
               );
               drawViewportCornerLabel(
                 ctx,
@@ -689,7 +705,9 @@ export const GameStage: React.FC<GameStageProps> = ({
                 stepCtx.projectiles,
                 stepCtx.scatteredRings,
                 stepCtx.particles,
-                tick
+                tick,
+                false,
+                stepCtx.hazards
               );
               drawViewportCornerLabel(
                 ctx,
@@ -720,7 +738,9 @@ export const GameStage: React.FC<GameStageProps> = ({
                 stepCtx.projectiles,
                 stepCtx.scatteredRings,
                 stepCtx.particles,
-                tick
+                tick,
+                false,
+                stepCtx.hazards
               );
               drawViewportCornerLabel(
                 ctx,
@@ -1140,6 +1160,10 @@ export const GameStage: React.FC<GameStageProps> = ({
                   ? `STARLIGHT CYBER BOSS HP: ${hud.bossHp}/${hud.bossMaxHp}`
                   : hud.bossType === 'hilltop'
                   ? `HILL TOP PYRO BOSS HP: ${hud.bossHp}/${hud.bossMaxHp}`
+                  : hud.bossType === 'chemical'
+                  ? `SLIME-CRUSHER MECH HP: ${hud.bossHp}/${hud.bossMaxHp}`
+                  : hud.bossType === 'mystic'
+                  ? `EGG DRILL-CRUSHER HP: ${hud.bossHp}/${hud.bossMaxHp}`
                   : `EGGMAN HP: ${hud.bossHp}/${hud.bossMaxHp}`}
               </span>
             )}

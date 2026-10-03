@@ -2,6 +2,7 @@ import { CHARACTER_SPECS } from '../data/presets';
 import {
   ActiveBadnik,
   ActiveBoss,
+  ActiveHazard,
   BadnikProjectile,
   EditableTextureKey,
   LevelData,
@@ -50,6 +51,12 @@ const TILE_TO_TEXTURE_KEY: Partial<Record<TileType, EditableTextureKey>> = {
   [TileType.GIMMICK_CONVEYOR_LEFT]: 'conveyorLeft',
   [TileType.GIMMICK_UPDRAFT]: 'updraft',
   [TileType.GIMMICK_TELEPORT_ORB]: 'teleportOrb',
+  [TileType.SPIKES_DOWN]: 'ceilingSpikes',
+  [TileType.GIMMICK_STALACTITE]: 'stalactite',
+  [TileType.GIMMICK_ACID_POOL]: 'acidPool',
+  [TileType.GIMMICK_STEAM_VENT]: 'steamVent',
+  [TileType.GIMMICK_TUBE_ENTRY]: 'tubeEntry',
+  [TileType.GIMMICK_TUBE_EXIT]: 'tubeExit',
   [TileType.RING]: 'ring',
   [TileType.GIANT_RING]: 'giantRing',
   [TileType.MONITOR_RING]: 'monitorRing',
@@ -172,7 +179,8 @@ export function renderViewport(
   scatteredRings: ScatteredRing[],
   particles: ParticleFX[],
   globalTick: number,
-  showEditorGrid: boolean = false
+  showEditorGrid: boolean = false,
+  hazards: ActiveHazard[] = []
 ) {
   ctx.save();
 
@@ -273,6 +281,63 @@ export function renderViewport(
       ctx.fillRect(hx + 110, viewHeight * 0.5, 22, viewHeight * 0.5);
       ctx.fillStyle = '#38BDF8';
       ctx.fillRect(hx + 116, viewHeight * 0.5, 6, viewHeight * 0.5);
+    }
+  } else if (tileset.decorStyle === 'chemicalplant') {
+    // Chemical Plant Zone: Blue chemical vats, glass pipes & steel gantries
+    const farOffset = -((camCenterX * 0.12) % 300);
+    for (let mx = farOffset - 300; mx < viewWidth + 300; mx += 300) {
+      // Distant steel vat silhouettes
+      ctx.fillStyle = '#1E3A8A';
+      ctx.fillRect(mx + 12, viewHeight * 0.3, 72, viewHeight * 0.7);
+      ctx.fillRect(mx + 130, viewHeight * 0.42, 96, viewHeight * 0.58);
+      ctx.fillRect(mx + 246, viewHeight * 0.24, 48, viewHeight * 0.76);
+      // Light-grey metal caps & yellow trim
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillRect(mx + 8, viewHeight * 0.3, 80, 10);
+      ctx.fillRect(mx + 126, viewHeight * 0.42, 104, 8);
+      ctx.fillStyle = '#FACC15';
+      ctx.fillRect(mx + 12, viewHeight * 0.62, 72, 4);
+      ctx.fillRect(mx + 130, viewHeight * 0.72, 96, 4);
+    }
+    // Rising blue chemical pipes in the mid ground
+    const pipeOffset = -((camCenterX * 0.22) % 260);
+    for (let px = pipeOffset - 260; px < viewWidth + 260; px += 260) {
+      ctx.fillStyle = 'rgba(125, 211, 252, 0.35)';
+      ctx.fillRect(px + 40, viewHeight * 0.2, 14, viewHeight * 0.8);
+      ctx.fillRect(px + 160, viewHeight * 0.34, 18, viewHeight * 0.66);
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.5)';
+      ctx.fillRect(px + 44, viewHeight * 0.2, 4, viewHeight * 0.8);
+      ctx.fillRect(px + 165, viewHeight * 0.34, 5, viewHeight * 0.66);
+    }
+  } else if (tileset.decorStyle === 'cave') {
+    // Mystic Caverns Zone: deep purple spooky cave with hanging rock formations
+    const farOffset = -((camCenterX * 0.1) % 300);
+    for (let mx = farOffset - 300; mx < viewWidth + 300; mx += 300) {
+      ctx.fillStyle = '#2E1065';
+      ctx.beginPath();
+      ctx.moveTo(mx, viewHeight * 0.45);
+      ctx.lineTo(mx + 40, viewHeight * 0.2);
+      ctx.lineTo(mx + 70, viewHeight * 0.46);
+      ctx.lineTo(mx + 120, viewHeight * 0.14);
+      ctx.lineTo(mx + 160, viewHeight * 0.44);
+      ctx.lineTo(mx + 220, viewHeight * 0.22);
+      ctx.lineTo(mx + 300, viewHeight * 0.5);
+      ctx.lineTo(mx + 300, 0);
+      ctx.lineTo(mx, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Sparkling crystal veins & distant torches
+    const crystalOffset = -((camCenterX * 0.2) % 220);
+    for (let cx = crystalOffset - 220; cx < viewWidth + 220; cx += 220) {
+      ctx.fillStyle = globalTick % 40 < 20 ? '#22D3EE' : '#38BDF8';
+      ctx.fillRect(cx + 36, viewHeight * 0.52, 5, 5);
+      ctx.fillRect(cx + 96, viewHeight * 0.64, 4, 4);
+      ctx.fillRect(cx + 170, viewHeight * 0.48, 6, 6);
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
+      ctx.beginPath();
+      ctx.arc(cx + 130, viewHeight * 0.7, 46, 0, Math.PI * 2);
+      ctx.fill();
     }
   } else {
     ctx.fillStyle = tileset.palette.mountainFar;
@@ -439,7 +504,7 @@ export function renderViewport(
       ctx.setLineDash([]);
       ctx.restore();
     }
-    drawEggmanBoss(ctx, boss, globalTick);
+    drawEggmanBoss(ctx, boss, globalTick, customTextures);
   }
 
   for (const proj of projectiles) {
@@ -511,15 +576,99 @@ export function renderViewport(
     ctx.restore();
   }
 
+  // 4B. Render Non-Projectile Mech Hazards (stalactites, debris, shockwaves, steam)
+  for (const hz of hazards) {
+    ctx.save();
+    const lifeRatio = Math.max(0, hz.life / hz.maxLife);
+    if (hz.kind === 'stalactite') {
+      ctx.translate(hz.x, hz.y);
+      ctx.fillStyle = '#4C1D95';
+      ctx.beginPath();
+      ctx.moveTo(-9, -14);
+      ctx.lineTo(9, -14);
+      ctx.lineTo(0, 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#7E22CE';
+      ctx.beginPath();
+      ctx.moveTo(-4, -12);
+      ctx.lineTo(2, -12);
+      ctx.lineTo(0, 8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#22D3EE';
+      ctx.fillRect(-2, 12, 4, 4);
+    } else if (hz.kind === 'debris') {
+      ctx.fillStyle = '#6B21A8';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#C084FC';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#22D3EE';
+      ctx.fillRect(hz.x - 2, hz.y - 2, 4, 4);
+    } else if (hz.kind === 'shockwave') {
+      const arcY = hz.y + 8;
+      ctx.globalAlpha = Math.min(1, lifeRatio + 0.25);
+      ctx.strokeStyle = '#FACC15';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(hz.x, arcY, hz.radius, Math.PI, 0);
+      ctx.stroke();
+      ctx.strokeStyle = '#FDE047';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(hz.x, arcY, hz.radius * 0.6, Math.PI, 0);
+      ctx.stroke();
+    } else if (hz.kind === 'steam' || hz.kind === 'steam_burst') {
+      ctx.globalAlpha = Math.min(1, lifeRatio + 0.2) * 0.65;
+      ctx.fillStyle = '#E0F2FE';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.radius * (1.2 - lifeRatio * 0.4), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y - 6, hz.radius * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // 5. Render Scattered Rings
   for (const sr of scatteredRings) {
     if (sr.timer < 60 && Math.floor(sr.timer / 4) % 2 === 0) continue;
     drawRing(ctx, sr.x, sr.y, globalTick);
   }
 
-  // 6. Render Players
+  // 6. Render Players (chemical travel tube glass pipe drawn first while riding)
   for (let i = players.length - 1; i >= 0; i--) {
-    drawPlayerSprite(ctx, players[i], globalTick);
+    const pl = players[i];
+    if (pl.tubeTravel) {
+      const route = pl.tubeTravel.points;
+      if (route.length > 1) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        // Outer glass tube shell
+        ctx.strokeStyle = 'rgba(219, 234, 254, 0.45)';
+        ctx.lineWidth = 42;
+        ctx.beginPath();
+        ctx.moveTo(route[0].x, route[0].y);
+        for (let p = 1; p < route.length; p++) ctx.lineTo(route[p].x, route[p].y);
+        ctx.stroke();
+        // Blue chemicals rushing through the pipe
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+        ctx.lineWidth = 26;
+        ctx.stroke();
+        // Specular highlight
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    drawPlayerSprite(ctx, pl, globalTick);
   }
 
   // 7. Render Particles & Score Popups
@@ -626,6 +775,64 @@ function drawZoneDecoration(
     ctx.fillStyle = '#FACC15';
     ctx.fillRect(x - 16, groundY - 62, 32, 5);
     ctx.fillRect(x - 16, groundY - 6, 32, 6);
+  } else if (tileset.decorStyle === 'chemicalplant') {
+    // Chemical Plant Zone: glass pipe with bubbling blue chemicals & a valve wheel
+    ctx.fillStyle = '#64748B';
+    ctx.fillRect(x - 16, groundY - 66, 32, 8);
+    ctx.fillRect(x - 16, groundY - 8, 32, 8);
+    ctx.fillStyle = '#94A3B8';
+    ctx.fillRect(x - 4, groundY - 58, 8, 50);
+    // Glass tube with rising blue chemical fluid
+    const fluidH = 34 + Math.sin(tick * 0.07) * 8;
+    ctx.fillStyle = 'rgba(219, 234, 254, 0.75)';
+    ctx.fillRect(x - 12, groundY - 58, 24, 50);
+    ctx.fillStyle = '#0EA5E9';
+    ctx.fillRect(x - 10, groundY - 10 - fluidH, 20, fluidH);
+    ctx.fillStyle = '#7DD3FC';
+    ctx.fillRect(x - 6, groundY - 10 - fluidH, 5, fluidH);
+    // Bubbles
+    ctx.fillStyle = '#E0F2FE';
+    for (let b = 0; b < 3; b++) {
+      const by = groundY - 12 - ((tick * 1.4 + b * 17) % 40);
+      ctx.beginPath();
+      ctx.arc(x - 4 + b * 4, by, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Yellow valve wheel
+    ctx.strokeStyle = '#FACC15';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, groundY - 62, 10, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (tileset.decorStyle === 'cave') {
+    // Mystic Caverns Zone: purple stalagmite cluster, crystal shard & mine cart rail
+    ctx.fillStyle = '#4C1D95';
+    ctx.beginPath();
+    ctx.moveTo(x - 14, groundY);
+    ctx.lineTo(x - 6, groundY - 54);
+    ctx.lineTo(x + 2, groundY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#5B21B6';
+    ctx.beginPath();
+    ctx.moveTo(x + 2, groundY);
+    ctx.lineTo(x + 10, groundY - 36);
+    ctx.lineTo(x + 18, groundY);
+    ctx.closePath();
+    ctx.fill();
+    // Glowing crystal
+    ctx.fillStyle = tick % 30 < 15 ? '#22D3EE' : '#67E8F9';
+    ctx.beginPath();
+    ctx.moveTo(x, groundY - 66);
+    ctx.lineTo(x + 6, groundY - 52);
+    ctx.lineTo(x - 6, groundY - 52);
+    ctx.closePath();
+    ctx.fill();
+    // Mine cart rail tie
+    ctx.fillStyle = '#B45309';
+    ctx.fillRect(x - 18, groundY - 6, 36, 5);
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(x - 18, groundY - 10, 36, 3);
   } else {
     ctx.fillStyle = tileset.palette.soilPrimary;
     ctx.fillRect(x - 10, groundY - 64, 20, 64);
@@ -1588,6 +1795,155 @@ function drawTile(
       break;
     }
 
+    case TileType.GIMMICK_TUBE_ENTRY: {
+      // Chemical Plant Travel Tube Intake: glass pipe mouth with blue chemicals
+      ctx.fillStyle = '#64748B';
+      ctx.fillRect(wx, wy, TILE_SIZE, 8);
+      ctx.fillStyle = 'rgba(219, 234, 254, 0.65)';
+      ctx.fillRect(wx + 4, wy + 6, 24, 26);
+      const entryFluid = 12 + Math.sin(tick * 0.16 + wx * 0.05) * 4;
+      ctx.fillStyle = '#0EA5E9';
+      ctx.fillRect(wx + 6, wy + 32 - entryFluid, 20, entryFluid);
+      ctx.fillStyle = '#7DD3FC';
+      ctx.fillRect(wx + 10, wy + 32 - entryFluid, 4, entryFluid);
+      // Downward intake arrows
+      ctx.fillStyle = tick % 16 < 8 ? '#E0F2FE' : '#FACC15';
+      for (let a = 0; a < 2; a++) {
+        const ay = wy + 4 + ((tick * 1.6 + a * 10) % 20);
+        ctx.beginPath();
+        ctx.moveTo(wx + 12, ay);
+        ctx.lineTo(wx + 20, ay);
+        ctx.lineTo(wx + 16, ay + 6);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+
+    case TileType.GIMMICK_TUBE_EXIT: {
+      // Chemical Plant Travel Tube Exit Nozzle: chrome throat & rising bubbles
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillRect(wx + 2, wy + 6, TILE_SIZE - 4, TILE_SIZE - 6);
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(wx, wy, TILE_SIZE, 8);
+      ctx.fillStyle = '#E2E8F0';
+      ctx.fillRect(wx + 2, wy + 2, TILE_SIZE - 4, 3);
+      // Glowing chemical throat
+      ctx.fillStyle = '#0EA5E9';
+      ctx.beginPath();
+      ctx.ellipse(wx + 16, wy + 18, 10, 8 + Math.sin(tick * 0.2) * 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#7DD3FC';
+      ctx.beginPath();
+      ctx.ellipse(wx + 16, wy + 17, 5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Launch bubbles shooting upward
+      ctx.fillStyle = '#E0F2FE';
+      for (let b = 0; b < 3; b++) {
+        const by = wy + 4 - ((tick * 2.4 + b * 12) % 30);
+        ctx.beginPath();
+        ctx.arc(wx + 8 + b * 8, by, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+
+    case TileType.GIMMICK_ACID_POOL: {
+      // Chemical Plant Boiling Toxic Blue Chemical Pool
+      ctx.save();
+      const acidGrad = ctx.createLinearGradient(wx, wy, wx, wy + TILE_SIZE);
+      acidGrad.addColorStop(0, '#E0F2FE');
+      acidGrad.addColorStop(0.25, '#38BDF8');
+      acidGrad.addColorStop(0.75, '#0284C7');
+      acidGrad.addColorStop(1, '#075985');
+      ctx.fillStyle = acidGrad;
+      ctx.fillRect(wx, wy + 3, TILE_SIZE, TILE_SIZE - 3);
+      // Wavy bubbling surface
+      ctx.fillStyle = tick % 12 < 6 ? '#BAE6FD' : '#7DD3FC';
+      for (let i = 0; i < 4; i++) {
+        const waveY = wy + 2 + Math.sin(tick * 0.16 + (wx + i * 8) * 0.14) * 2.2;
+        ctx.fillRect(wx + i * 8, waveY, 7, 4);
+      }
+      // Toxic bubbles rising through the vat
+      const bubX = wx + 8 + ((tick + wx) % 18);
+      const bubY = wy + 24 - ((tick * 0.45 + wx) % 14);
+      ctx.fillStyle = '#E0F2FE';
+      ctx.beginPath();
+      ctx.arc(bubX, bubY, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      break;
+    }
+
+    case TileType.GIMMICK_STEAM_VENT: {
+      // Chemical Plant Steam Vent: riveted grate with periodic white steam jets
+      const ventTick = tick % 150;
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(wx, wy + 8, TILE_SIZE, TILE_SIZE - 8);
+      ctx.fillStyle = '#64748B';
+      ctx.fillRect(wx, wy + 8, TILE_SIZE, 4);
+      ctx.fillStyle = '#0F172A';
+      for (let sx = 4; sx < TILE_SIZE - 2; sx += 6) {
+        ctx.fillRect(wx + sx, wy + 14, 3, 14);
+      }
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(wx + 3, wy + 11, 2, 2);
+      ctx.fillRect(wx + TILE_SIZE - 5, wy + 11, 2, 2);
+      if (ventTick < 55) {
+        ctx.fillStyle = 'rgba(224, 242, 254, 0.6)';
+        for (let s = 0; s < 3; s++) {
+          const sy = wy + 8 - ((ventTick * 1.6 + s * 12) % 40);
+          ctx.beginPath();
+          ctx.arc(wx + 8 + s * 8, sy, 5 - s, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case TileType.SPIKES_DOWN: {
+      // Mystic Caverns Ceiling Spikes: steel plate above, spikes thrust downward
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(wx, wy, TILE_SIZE, 12);
+      ctx.strokeStyle = '#64748B';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(wx + 0.5, wy + 0.5, TILE_SIZE - 1, 11);
+      ctx.fillStyle = pal.hazardColor;
+      for (let i = 0; i < 4; i++) {
+        const sx = wx + i * 8;
+        ctx.beginPath();
+        ctx.moveTo(sx + 1, wy + 12);
+        ctx.lineTo(sx + 4, wy + 30);
+        ctx.lineTo(sx + 7, wy + 12);
+        ctx.closePath();
+        ctx.fill();
+      }
+      break;
+    }
+
+    case TileType.GIMMICK_STALACTITE: {
+      // Mystic Caverns hanging purple rock stalactite (ready to drop!)
+      const sway = Math.sin(tick * 0.06 + wx * 0.03) * 1.2;
+      ctx.fillStyle = '#4C1D95';
+      ctx.beginPath();
+      ctx.moveTo(wx + 2, wy);
+      ctx.lineTo(wx + 30, wy);
+      ctx.lineTo(wx + 18 + sway, wy + 26);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#7E22CE';
+      ctx.beginPath();
+      ctx.moveTo(wx + 6, wy + 2);
+      ctx.lineTo(wx + 16, wy + 2);
+      ctx.lineTo(wx + 12 + sway, wy + 20);
+      ctx.closePath();
+      ctx.fill();
+      // Twinkling crystal tip
+      ctx.fillStyle = tick % 18 < 9 ? '#22D3EE' : '#A855F7';
+      ctx.fillRect(wx + 14 + sway, wy + 26, 4, 4);
+      break;
+    }
+
     case TileType.DECO_WATERFALL: {
       // Emerald Mountains Act 2 Cascading Waterfall Decoration!
       ctx.save();
@@ -1693,8 +2049,313 @@ function drawRing(ctx: CanvasRenderingContext2D, x: number, y: number, tick: num
   ctx.restore();
 }
 
-function drawEggmanBoss(ctx: CanvasRenderingContext2D, boss: ActiveBoss, tick: number) {
+function drawEggmanBoss(
+  ctx: CanvasRenderingContext2D,
+  boss: ActiveBoss,
+  tick: number,
+  customTextures?: Record<string, HTMLCanvasElement>
+) {
   ctx.save();
+
+  // ==========================================================================
+  // NEW MECHA BOSS 1: HYDRAULIC SLIME-CRUSHER & SIPHON MECH (Chemical Plant)
+  // ==========================================================================
+  if (boss.bossType === 'chemical') {
+    // Arena-wide Chemical Flood (rises when the vat valves open!)
+    const flood = boss.floodLevel || 0;
+    const floorY = boss.mechFloorY ?? boss.y + 96;
+    if (flood > 0.01) {
+      const surfaceY = floorY - flood * TILE_SIZE * 3;
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      const floodGrad = ctx.createLinearGradient(0, surfaceY, 0, floorY);
+      floodGrad.addColorStop(0, '#7DD3FC');
+      floodGrad.addColorStop(0.3, '#38BDF8');
+      floodGrad.addColorStop(1, '#075985');
+      ctx.fillStyle = floodGrad;
+      ctx.fillRect(boss.arenaLeft, surfaceY, boss.arenaRight - boss.arenaLeft, floorY - surfaceY);
+      // Bubbling crest + rising bubbles
+      ctx.fillStyle = '#E0F2FE';
+      for (let b = 0; b < 12; b++) {
+        const bx = boss.arenaLeft + ((b * 71 + tick * 1.6) % Math.max(1, boss.arenaRight - boss.arenaLeft));
+        const by = surfaceY + Math.sin(tick * 0.12 + b) * 3;
+        ctx.beginPath();
+        ctx.arc(bx, by, 3 + (b % 3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Siphon Vortex intake suction rings
+    if (boss.vortexActive) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.75)';
+      ctx.lineWidth = 3;
+      for (let r = 0; r < 3; r++) {
+        const rad = 30 + ((tick * 3 + r * 26) % 110);
+        ctx.globalAlpha = Math.max(0.1, 0.8 - rad / 130);
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y + 26, rad, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    ctx.translate(boss.x, boss.y);
+
+    // Floating Boss Health Bar
+    ctx.fillStyle = '#090D16';
+    ctx.fillRect(-30, -54, 60, 7);
+    ctx.fillStyle = '#38BDF8';
+    ctx.fillRect(-29, -53, Math.round(58 * (boss.hp / boss.maxHp)), 5);
+
+    if (boss.invulnTimer > 0 && Math.floor(boss.invulnTimer / 2) % 2 === 0) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(0, 0, 30, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    ctx.scale(boss.facing, 1);
+
+    // Optional custom chassis plate from the Tileset Studio boss slot
+    if (customTextures?.bossChemical) {
+      ctx.drawImage(customTextures.bossChemical, -26, -22, 52, 44);
+    }
+
+    // Dual hydraulic piston feet driving down toward the arena floor
+    const pistonExtend =
+      boss.mechPhase === 'piston_stomp'
+        ? Math.max(0, Math.sin(tick * 0.35) * 12 + 12)
+        : Math.abs(Math.sin(tick * 0.08)) * 4;
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(side * 26 - 6, 6, 12, 18 + pistonExtend);
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillRect(side * 26 - 9, 20 + pistonExtend, 18, 8);
+      ctx.strokeStyle = '#1E293B';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(side * 26 - 6, 6, 12, 18 + pistonExtend);
+    }
+
+    // Steel vat chassis with yellow hazard trim
+    ctx.fillStyle = '#94A3B8';
+    ctx.fillRect(-30, -24, 60, 34);
+    ctx.strokeStyle = '#1E293B';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-30, -24, 60, 34);
+    ctx.fillStyle = '#FACC15';
+    for (let sx = -28; sx < 28; sx += 10) {
+      ctx.fillRect(sx, -20, 5, 26);
+    }
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(-26, -14, 52, 8);
+    ctx.fillStyle = '#0EA5E9';
+    ctx.fillRect(-24, -12, 48, 4);
+
+    // Vat porthole bubbling with blue slime
+    ctx.fillStyle = '#0F172A';
+    ctx.beginPath();
+    ctx.arc(0, -2, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = tick % 20 < 10 ? '#38BDF8' : '#7DD3FC';
+    ctx.beginPath();
+    ctx.arc(0, -2, 6.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cooling dome (OPEN while overheating & venting steam for 120 frames)
+    const domeOpen = Boolean(boss.overheatFrames && boss.overheatFrames > 0);
+    ctx.fillStyle = domeOpen ? '#1E293B' : '#CBD5E1';
+    ctx.beginPath();
+    ctx.ellipse(0, -30, 20, domeOpen ? 8 : 13, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = domeOpen ? '#FACC15' : '#64748B';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    if (domeOpen) {
+      // Exposed glowing cockpit core + venting steam plumes
+      ctx.fillStyle = tick % 8 < 4 ? '#FACC15' : '#FDE047';
+      ctx.beginPath();
+      ctx.arc(0, -24, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.7)';
+      for (let s = 0; s < 4; s++) {
+        const sy = -36 - ((tick * 2.2 + s * 14) % 46);
+        ctx.beginPath();
+        ctx.arc((s % 2 === 0 ? -1 : 1) * (8 + s * 3), sy, 8 - s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Underslung Slime Siphon intake turbine (spinning fan)
+    ctx.save();
+    ctx.translate(0, 26);
+    ctx.rotate(boss.vortexActive ? tick * 0.9 : tick * 0.18);
+    ctx.fillStyle = '#334155';
+    ctx.beginPath();
+    ctx.arc(0, 0, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = boss.vortexActive ? '#7DD3FC' : '#64748B';
+    for (let f = 0; f < 4; f++) {
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(12, -3);
+      ctx.lineTo(12, 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#FACC15';
+    ctx.beginPath();
+    ctx.arc(0, 26, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    return;
+  }
+
+  // ==========================================================================
+  // NEW MECHA BOSS 2: EGG DRILL-CRUSHER (Mystic Caverns)
+  // ==========================================================================
+  if (boss.bossType === 'mystic') {
+    const phase = boss.mechPhase || 'drill_rev';
+    const stunned = phase === 'wall_crash_stun' && (boss.stunFrames || 0) > 0;
+    const burrowing = Boolean(boss.ceilingBurrow);
+
+    ctx.translate(boss.x, boss.y);
+
+    // Floating Boss Health Bar
+    ctx.fillStyle = '#090D16';
+    ctx.fillRect(-30, -50, 60, 7);
+    ctx.fillStyle = '#A855F7';
+    ctx.fillRect(-29, -49, Math.round(58 * (boss.hp / boss.maxHp)), 5);
+
+    if (boss.invulnTimer > 0 && Math.floor(boss.invulnTimer / 2) % 2 === 0) {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(0, 0, 30, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    ctx.scale(boss.facing, 1);
+
+    // Optional custom chassis plate from the Tileset Studio boss slot
+    if (customTextures?.bossMystic) {
+      ctx.drawImage(customTextures.bossMystic, -24, -24, 48, 48);
+    }
+
+    // Rock tremor dust while burrowing through the ceiling
+    if (burrowing) {
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.5)';
+      for (let d = 0; d < 4; d++) {
+        ctx.beginPath();
+        ctx.arc(-24 + d * 16, -26 - ((tick * 2 + d * 9) % 24), 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Heavy tracked treads
+    ctx.fillStyle = '#1E293B';
+    ctx.beginPath();
+    ctx.roundRect(-32, 12, 64, 16, 7);
+    ctx.fill();
+    ctx.strokeStyle = '#64748B';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#475569';
+    for (let w = -26; w <= 24; w += 10) {
+      ctx.beginPath();
+      ctx.arc(w, 20, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Purple hull with cyan trim
+    ctx.fillStyle = '#6B21A8';
+    ctx.beginPath();
+    ctx.roundRect(-28, -24, 56, 38, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#22D3EE';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#4C1D95';
+    ctx.fillRect(-22, -6, 44, 10);
+    ctx.fillStyle = '#C084FC';
+    ctx.fillRect(-20, -4, 40, 3);
+
+    // Cockpit dome (opens while the engine is stalled after the wall crash!)
+    ctx.fillStyle = stunned ? '#0F172A' : '#A5B4FC';
+    ctx.beginPath();
+    ctx.arc(0, -22, 14, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = stunned ? '#FACC15' : '#818CF8';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (stunned) {
+      // Jammed engine sparks & exposed pilot seat
+      ctx.fillStyle = tick % 8 < 4 ? '#FACC15' : '#EF4444';
+      ctx.beginPath();
+      ctx.arc(0, -20, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(-2, -30, 4, 10);
+      ctx.fillStyle = '#22D3EE';
+      for (let s = 0; s < 3; s++) {
+        ctx.fillRect(-16 + s * 14, -34 - (tick % 6), 3, 3);
+      }
+    } else {
+      // Dr. Eggman silhouette inside
+      ctx.fillStyle = '#090D16';
+      ctx.beginPath();
+      ctx.arc(0, -22, 7, Math.PI, 0);
+      ctx.fill();
+    }
+
+    // Rotating conical drill bit (jammed & tilted sideways while stunned)
+    ctx.save();
+    ctx.translate(26, -2);
+    if (stunned) {
+      ctx.rotate(0.42);
+    } else if (boss.drillSpinning !== false) {
+      ctx.rotate(tick * 0.55);
+    }
+    ctx.fillStyle = '#94A3B8';
+    ctx.beginPath();
+    ctx.moveTo(0, -11);
+    ctx.lineTo(26, 0);
+    ctx.lineTo(0, 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#475569';
+    for (let g = 0; g < 3; g++) {
+      ctx.beginPath();
+      ctx.moveTo(4 + g * 7, -10 + g * 3);
+      ctx.lineTo(12 + g * 7, 0);
+      ctx.lineTo(4 + g * 7, 10 - g * 3);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = '#22D3EE';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Drill tail exhaust
+    ctx.fillStyle = tick % 6 < 3 ? '#22D3EE' : '#7E22CE';
+    ctx.beginPath();
+    ctx.moveTo(-30, -6);
+    ctx.lineTo(-42 - (tick % 5), 0);
+    ctx.lineTo(-30, 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+    return;
+  }
 
   // ==========================================================================
   // SPECIAL BOSS 1: SONIC 2 SILVER SONIC (Mecha Sonic Mk. I)

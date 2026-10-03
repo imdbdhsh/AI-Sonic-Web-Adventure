@@ -355,6 +355,145 @@ export function generateDeathEggPixelMatrix(pal: TilesetPalette): CustomPixelMat
   };
 }
 
+// ============================================================================
+// NEW ZONE TILESET GENERATOR: CHEMICAL PLANT ZONE (Blue Chemicals · Metal ·
+// Glass Pipes with Blue Chemicals · Blue / Yellow / Light Grey Theme)
+// ============================================================================
+export function generateChemicalPlantZonePixelMatrix(
+  pal: TilesetPalette
+): CustomPixelMatrix {
+  const steelCap = pal.surfaceHighlight || '#E2E8F0';
+  const plateMid = pal.surfaceTop || '#94A3B8';
+  const hazardYellow = pal.platformTop || '#FACC15';
+  const steelDark = pal.soilSecondary || '#334155';
+  const steelBlue = pal.soilPrimary || '#1D4ED8';
+  const pipeGlass = '#DBEAFE';
+  const chemicalBlue = '#38BDF8';
+  const chemicalDeep = '#0369A1';
+  const rivet = '#F8FAFC';
+  const hazardBlack = '#0F172A';
+
+  const groundTop: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      // Light grey armored steel cap with rivet heads
+      if (y === 0) return steelCap;
+      if (y === 1) return (x === 0 || x === 15 || x === 7 || x === 8) ? rivet : plateMid;
+      // Yellow / black industrial hazard stripe band
+      if (y >= 2 && y <= 4) return (x + y) % 4 < 2 ? hazardYellow : hazardBlack;
+      if (y === 5) return x % 4 === 1 ? rivet : steelBlue;
+      // Glass pipe running through the metal with glowing blue chemicals inside
+      if (y === 6) return pipeGlass;
+      if (y >= 7 && y <= 9) {
+        if (x === 0 || x === 15) return pipeGlass;
+        const shimmer = (x + y) % 5 === 0;
+        return shimmer ? '#7DD3FC' : chemicalBlue;
+      }
+      if (y === 10) return pipeGlass;
+      if (x === 0 || x === 15 || x === 7 || x === 8) return steelBlue;
+      return plateMid;
+    })
+  );
+
+  const groundDeep: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (x === 0 || x === 15 || y === 0 || y === 15) return steelDark;
+      if ((x === 3 || x === 12) && (y === 3 || y === 12)) return rivet;
+      // Central glass pipe carrying blue chemicals through the deep metal
+      if (y >= 6 && y <= 9 && x >= 4 && x <= 11) {
+        if (x === 4 || x === 11) return pipeGlass;
+        return (x + y) % 3 === 0 ? '#7DD3FC' : chemicalDeep;
+      }
+      return (x + y) % 3 === 0 ? '#475569' : steelDark;
+    })
+  );
+
+  const platform: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (y === 0) return steelCap;
+      if (y >= 1 && y <= 3) return (x + y) % 4 < 2 ? hazardYellow : hazardBlack;
+      if (y === 4) return steelBlue;
+      if (y >= 5 && y <= 7 && x % 5 !== 4) return chemicalBlue;
+      if (y >= 8 && y <= 9) return plateMid;
+      return '';
+    })
+  );
+
+  const breakableRock: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (y === 0 || y === 15 || x === 0 || x === 15) return steelBlue;
+      if (y === 7 || x === 7) return steelDark;
+      const bolt = (x % 5 === 2 && y % 5 === 2);
+      if (bolt) return rivet;
+      return (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0 ? plateMid : '#64748B';
+    })
+  );
+
+  return { groundTop, groundDeep, platform, breakableRock };
+}
+
+// ============================================================================
+// NEW ZONE TILESET GENERATOR: MYSTIC CAVERNS ZONE (Purple Rocky Spooky Cave
+// with Mine Cart Shafts)
+// ============================================================================
+export function generateMysticCavernPixelMatrix(
+  pal: TilesetPalette
+): CustomPixelMatrix {
+  const rockTop = pal.surfaceTop || '#A855F7';
+  const rockLight = pal.surfaceHighlight || '#D8B4FE';
+  const rockMid = pal.soilPrimary || '#7E22CE';
+  const rockDeep = pal.soilSecondary || '#3B0764';
+  const crystal = '#22D3EE';
+  const cartWood = '#B45309';
+  const cartIron = '#475569';
+  const moss = '#4ADE80';
+
+  const groundTop: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (y === 0) return (x % 6 === 2) ? crystal : rockLight;
+      if (y <= 2) return rockTop;
+      if (y === 3) return (x + y) % 5 === 0 ? crystal : rockTop;
+      if (y === 4 && x % 7 === 3) return moss;
+      const check = (Math.floor(x / 4) + Math.floor((y - 5) / 4)) % 2 === 0;
+      return check ? rockMid : rockDeep;
+    })
+  );
+
+  const groundDeep: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (x === 0 || x === 15 || y === 0 || y === 15) return rockMid;
+      // Buried mine cart rail shaft running horizontally through the rock
+      if (y >= 7 && y <= 9) {
+        if (y === 8) return cartIron;
+        if (x % 4 === 0) return cartWood;
+        return rockDeep;
+      }
+      if ((x * 7 + y * 13) % 23 === 0) return crystal;
+      return (x + y) % 4 === 0 ? '#5B21B6' : rockDeep;
+    })
+  );
+
+  const platform: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (y === 0) return cartIron;
+      if (y === 1) return x % 4 === 0 ? cartIron : cartWood;
+      if (y === 2) return cartWood;
+      if (y === 3) return x % 8 === 3 ? cartIron : rockMid;
+      return '';
+    })
+  );
+
+  const breakableRock: string[][] = Array.from({ length: 16 }, (_, y) =>
+    Array.from({ length: 16 }, (_, x) => {
+      if (y === 0 || y === 15) return rockDeep;
+      const crack = (x + y * 2) % 9 === 0 || (x * 2 - y) % 11 === 0;
+      if (crack) return '#2E1065';
+      return (Math.floor(x / 4) + Math.floor(y / 4)) % 2 === 0 ? rockMid : '#6B21A8';
+    })
+  );
+
+  return { groundTop, groundDeep, platform, breakableRock };
+}
+
 export function generateBlankWhiteBlockMatrix(): string[][] {
   return Array.from({ length: 16 }, () =>
     Array.from({ length: 16 }, () => '#FFFFFF')
@@ -368,6 +507,10 @@ export function generateZonePixelMatrix(
   const base =
     decorStyle === 'chemical'
       ? generateChemicalPlantPixelMatrix(pal)
+      : decorStyle === 'chemicalplant'
+      ? generateChemicalPlantZonePixelMatrix(pal)
+      : decorStyle === 'cave'
+      ? generateMysticCavernPixelMatrix(pal)
       : decorStyle === 'deathegg'
       ? generateDeathEggPixelMatrix(pal)
       : generateDefaultPixelMatrix(
@@ -452,6 +595,98 @@ export function getDefaultTilePixelMatrix(
           return '#94A3B8';
         }
         return '';
+      })
+    );
+  }
+
+  if (key === 'ceilingSpikes') {
+    // Ceiling Spikes: steel mounting plate on top, spikes thrusting DOWNWARD
+    return Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => {
+        if (y <= 5) {
+          return y === 0 || x === 0 || x === 15 ? '#475569' : '#334155';
+        }
+        const spikeCol = x % 4;
+        const distFromTip = 14 - y;
+        if (spikeCol >= 1 && spikeCol <= 2 && distFromTip >= 0) {
+          return pal.hazardColor || '#E2E8F0';
+        }
+        if (y <= 10 && (spikeCol === 0 || spikeCol === 3)) return '#94A3B8';
+        return '';
+      })
+    );
+  }
+
+  if (key === 'stalactite') {
+    // Mystic Caverns Falling Rock Stalactite: purple rock cone pointing down
+    return Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => {
+        if (y === 0) return '#334155';
+        const halfWidth = Math.max(1, 8 - y * 0.78);
+        const dist = Math.abs(x - 7.5);
+        if (dist > halfWidth) return '';
+        if (dist > halfWidth - 1.5) return '#4C1D95';
+        if (y % 4 === 0) return '#2E1065';
+        return (x + y) % 3 === 0 ? '#7E22CE' : '#5B21B6';
+      })
+    );
+  }
+
+  if (key === 'acidPool') {
+    // Boiling Toxic Blue Chemical Pool with bubbling surface
+    return Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => {
+        if (y === 0) return (x + y) % 3 === 0 ? '#E0F2FE' : '';
+        if (y <= 2) return '#7DD3FC';
+        if (y <= 5) return (x + y) % 4 === 0 ? '#BAE6FD' : '#38BDF8';
+        if (y <= 10) return (x * 3 + y) % 5 === 0 ? '#0EA5E9' : '#0284C7';
+        return '#075985';
+      })
+    );
+  }
+
+  if (key === 'steamVent') {
+    // Steam Vent: riveted steel grate with dark vent slits
+    return Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => {
+        if (x === 0 || x === 15 || y === 0 || y === 15) return '#64748B';
+        if ((x === 2 || x === 13) && (y === 2 || y === 13)) return '#F8FAFC';
+        if (x % 5 === 1 && y >= 4 && y <= 11) return '#0F172A';
+        return (x + y) % 3 === 0 ? '#475569' : '#334155';
+      })
+    );
+  }
+
+  if (key === 'tubeEntry' || key === 'tubeExit') {
+    // Chemical Plant Travel Tube: glass pipe ring filled with blue chemicals
+    const isExit = key === 'tubeExit';
+    return Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => {
+        const dist = Math.hypot(x - 7.5, y - 7.5);
+        if (dist > 7.6) return '';
+        if (dist > 5.6) return isExit ? '#CBD5E1' : '#94A3B8';
+        if (dist > 4.4) return '#DBEAFE';
+        if (!isExit && y < 6) return '';
+        if (isExit && y > 10) return '';
+        return (x + y) % 4 === 0 ? '#7DD3FC' : '#0EA5E9';
+      })
+    );
+  }
+
+  if (key === 'bossChemical' || key === 'bossMystic') {
+    // Tileset Studio boss icon plates (drawn as the mech chassis core in-game)
+    const isChemical = key === 'bossChemical';
+    return Array.from({ length: 16 }, (_, y) =>
+      Array.from({ length: 16 }, (_, x) => {
+        const hull = isChemical ? '#94A3B8' : '#6B21A8';
+        const trim = isChemical ? '#FACC15' : '#22D3EE';
+        if (x < 1 || x > 14 || y < 1 || y > 14) return '#0F172A';
+        if (y === 1 || y === 14 || x === 1 || x === 14) return trim;
+        if (y >= 5 && y <= 10 && x >= 4 && x <= 11) {
+          if (Math.hypot(x - 7.5, y - 7.5) <= 2.6) return trim;
+          return '#0F172A';
+        }
+        return hull;
       })
     );
   }
@@ -855,6 +1090,78 @@ export const DEFAULT_TILESETS: TilesetConfig[] = [
       brickColor: '#475569',
       brickMortar: '#090D16',
       hazardColor: '#FACC15',
+    }),
+  },
+  {
+    id: 'chemical-plant-zone',
+    name: 'Chemical Plant Zone',
+    zoneSubtitle: 'Blue Chemical Vats, Glass Travel Tubes & Steel Hydraulic Gantries',
+    decorStyle: 'chemicalplant',
+    palette: {
+      skyTop: '#0B2A5B',
+      skyBottom: '#3B82F6',
+      mountainFar: '#1E3A8A',
+      hillNear: '#94A3B8',
+      waterColor: '#38BDF8',
+      surfaceTop: '#94A3B8',
+      surfaceHighlight: '#E2E8F0',
+      soilPrimary: '#1D4ED8',
+      soilSecondary: '#334155',
+      platformTop: '#FACC15',
+      brickColor: '#64748B',
+      brickMortar: '#0F172A',
+      hazardColor: '#E2E8F0',
+    },
+    customPixels: generateChemicalPlantZonePixelMatrix({
+      skyTop: '#0B2A5B',
+      skyBottom: '#3B82F6',
+      mountainFar: '#1E3A8A',
+      hillNear: '#94A3B8',
+      waterColor: '#38BDF8',
+      surfaceTop: '#94A3B8',
+      surfaceHighlight: '#E2E8F0',
+      soilPrimary: '#1D4ED8',
+      soilSecondary: '#334155',
+      platformTop: '#FACC15',
+      brickColor: '#64748B',
+      brickMortar: '#0F172A',
+      hazardColor: '#E2E8F0',
+    }),
+  },
+  {
+    id: 'mystic-caverns',
+    name: 'Mystic Caverns Zone',
+    zoneSubtitle: 'Purple Spooky Caverns, Crystal Grottoes & Mine Cart Shafts',
+    decorStyle: 'cave',
+    palette: {
+      skyTop: '#160B2E',
+      skyBottom: '#3B0764',
+      mountainFar: '#2E1065',
+      hillNear: '#4C1D95',
+      waterColor: '#7C3AED',
+      surfaceTop: '#A855F7',
+      surfaceHighlight: '#D8B4FE',
+      soilPrimary: '#7E22CE',
+      soilSecondary: '#3B0764',
+      platformTop: '#B45309',
+      brickColor: '#6B21A8',
+      brickMortar: '#2E1065',
+      hazardColor: '#E9D5FF',
+    },
+    customPixels: generateMysticCavernPixelMatrix({
+      skyTop: '#160B2E',
+      skyBottom: '#3B0764',
+      mountainFar: '#2E1065',
+      hillNear: '#4C1D95',
+      waterColor: '#7C3AED',
+      surfaceTop: '#A855F7',
+      surfaceHighlight: '#D8B4FE',
+      soilPrimary: '#7E22CE',
+      soilSecondary: '#3B0764',
+      platformTop: '#B45309',
+      brickColor: '#6B21A8',
+      brickMortar: '#2E1065',
+      hazardColor: '#E9D5FF',
     }),
   },
 ];
@@ -2168,11 +2475,416 @@ function buildDeathEggZone(): LevelData {
   };
 }
 
+// ============================================================================
+// LEVEL 9: CHEMICAL PLANT ZONE — ACT 1
+// (Blue Chemical Vats, Glass Travel Tubes, Steam Vents & Toxic Pools)
+// ============================================================================
+function buildChemicalPlantAct1(): LevelData {
+  const width = 236;
+  const height = 32;
+  const grid = createEmptyGrid(width, height);
+
+  // Section 1: Steel Intake Deck, Conveyor Gantry & First Travel Tube Intake
+  fillRect(grid, 0, 23, 36, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[22][4] = TileType.SPAWN_P1;
+  grid[22][2] = TileType.SPAWN_P2;
+  for (let x = 7; x <= 15; x++) grid[21][x] = TileType.RING;
+  grid[22][16] = TileType.MONITOR_SHIELD;
+  grid[22][17] = TileType.MONITOR_SPEED;
+  for (let cx = 18; cx <= 25; cx++) grid[23][cx] = TileType.GIMMICK_CONVEYOR_RIGHT;
+  grid[20][23] = TileType.BADNIK_CRAB;
+  grid[23][32] = TileType.GIMMICK_TUBE_ENTRY; // Fall into the glass tube network!
+
+  // Tube #1 Exit Nozzle on the raised glass-pipe gantry (x 38..52)
+  fillRect(grid, 38, 16, 14, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[15][45] = TileType.GIMMICK_TUBE_EXIT;
+  for (let x = 39; x <= 43; x++) grid[14][x] = TileType.RING;
+  grid[15][50] = TileType.MONITOR_RING;
+
+  // Section 2: Boiling Toxic Blue Chemical Vats & Steam Vent Pillars (x 36..96)
+  fillRect(grid, 34, 29, 62, 3, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
+  for (let ax = 36; ax <= 95; ax++) grid[28][ax] = TileType.GIMMICK_ACID_POOL;
+  fillRect(grid, 50, 24, 3, 5, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[24][51] = TileType.GIMMICK_STEAM_VENT;
+  fillRect(grid, 74, 24, 3, 5, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[24][75] = TileType.GIMMICK_STEAM_VENT;
+  for (let px = 42; px <= 92; px += 10) {
+    fillRect(grid, px, 22, 5, 1, TileType.PLATFORM, TileType.PLATFORM);
+    grid[20][px + 2] = TileType.RING;
+  }
+  grid[21][46] = TileType.BADNIK_BUZZ;
+  grid[18][62] = TileType.GIMMICK_DASH_RING;
+  grid[21][80] = TileType.BADNIK_BOMB;
+  grid[20][88] = TileType.RING;
+  grid[20][89] = TileType.RING;
+  grid[20][90] = TileType.RING;
+
+  // Section 3: Upper Steel Gantry, Spike Beds & Breakable Crate Vault (x 96..152)
+  fillRect(grid, 96, 21, 56, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[20][99] = TileType.CHECKPOINT;
+  for (let x = 101; x <= 108; x++) grid[20][x] = TileType.RING;
+  for (let sx = 112; sx <= 122; sx += 5) grid[20][sx] = TileType.SPIKES_UP;
+  fillRect(grid, 110, 15, 16, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 112; sx <= 122; sx += 5) grid[17][sx] = TileType.SPIKES_DOWN;
+  grid[20][127] = TileType.BADNIK_SPINY;
+  grid[19][130] = TileType.SPRING_RED;
+
+  // Breakable metal crate vault hiding a Giant Ring (secret room!)
+  fillRect(grid, 133, 16, 12, 6, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 17; ry <= 20; ry++) {
+    for (let rx = 134; rx <= 143; rx++) grid[ry][rx] = TileType.EMPTY;
+    grid[ry][133] = TileType.BREAKABLE_ROCK;
+  }
+  grid[20][137] = TileType.GIANT_RING;
+  grid[20][139] = TileType.MONITOR_INVINCIBILITY;
+  grid[20][141] = TileType.RING;
+  grid[20][142] = TileType.RING;
+
+  // Section 4: Chemical Accelerator Runway & Grand Tube Launch (x 152..236)
+  fillRect(grid, 152, 22, 84, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[21][155] = TileType.CHECKPOINT;
+  grid[21][158] = TileType.BOOSTER_RIGHT;
+  grid[16][164] = TileType.LOOP_HEAD;
+  for (let x = 172; x <= 182; x += 2) grid[20][x] = TileType.RING;
+  grid[21][186] = TileType.BADNIK_SPINY;
+  grid[22][196] = TileType.GIMMICK_TUBE_ENTRY; // Second travel tube jump!
+  grid[21][204] = TileType.MONITOR_FLAME;
+
+  // Tube #2 Exit Nozzle high above the finish runway (x 208..224)
+  fillRect(grid, 208, 15, 16, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[14][216] = TileType.GIMMICK_TUBE_EXIT;
+  for (let x = 209; x <= 213; x++) grid[13][x] = TileType.RING;
+  grid[14][223] = TileType.GIANT_RING;
+
+  grid[21][230] = TileType.GOAL_POST;
+
+  return {
+    id: 'chemical-plant-act-1',
+    name: 'Chemical Plant',
+    act: 1,
+    author: 'Sonic Velocity Studio',
+    width,
+    height,
+    tilesetId: 'chemical-plant-zone',
+    grid,
+    p1Spawn: { x: 4, y: 22 },
+    p2Spawn: { x: 2, y: 22 },
+  };
+}
+
+// ============================================================================
+// LEVEL 10: CHEMICAL PLANT ZONE — ACT 2
+// (Hydraulic Slime-Crusher & Siphon Mech — Piston Stomp, Chemical Flood,
+//  Siphon Vortex & 120-Frame Overheat Venting Weak Point)
+// ============================================================================
+function buildChemicalPlantAct2(): LevelData {
+  const width = 246;
+  const height = 32;
+  const grid = createEmptyGrid(width, height);
+
+  // Section 1: Vat Valve Gauntlet & First Travel Tube
+  fillRect(grid, 0, 22, 40, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[21][4] = TileType.SPAWN_P1;
+  grid[21][2] = TileType.SPAWN_P2;
+  for (let x = 7; x <= 14; x++) grid[20][x] = TileType.RING;
+  grid[21][16] = TileType.MONITOR_FLAME;
+  grid[21][18] = TileType.MONITOR_BUBBLE;
+  grid[21][20] = TileType.BADNIK_CRAB;
+  for (let cx = 24; cx <= 30; cx++) grid[22][cx] = TileType.GIMMICK_CONVEYOR_RIGHT;
+  grid[22][36] = TileType.GIMMICK_TUBE_ENTRY;
+
+  // Tube exit nozzle on the glass-pipe overpass
+  fillRect(grid, 42, 15, 12, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[14][48] = TileType.GIMMICK_TUBE_EXIT;
+  for (let x = 43; x <= 47; x++) grid[13][x] = TileType.RING;
+  grid[14][52] = TileType.MONITOR_LIGHTNING;
+
+  // Section 2: Great Blue Chemical Lake & Steam Vent Crossing (x 38..104)
+  fillRect(grid, 38, 29, 68, 3, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
+  for (let ax = 40; ax <= 103; ax++) grid[28][ax] = TileType.GIMMICK_ACID_POOL;
+  for (let px = 44; px <= 98; px += 9) {
+    fillRect(grid, px, 23, 4, 1, TileType.PLATFORM, TileType.PLATFORM);
+    grid[21][px + 1] = TileType.RING;
+    grid[21][px + 2] = TileType.RING;
+  }
+  fillRect(grid, 56, 24, 3, 5, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[24][57] = TileType.GIMMICK_STEAM_VENT;
+  fillRect(grid, 82, 24, 3, 5, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[24][83] = TileType.GIMMICK_STEAM_VENT;
+  grid[22][66] = TileType.GIMMICK_DASH_RING;
+  grid[20][90] = TileType.BADNIK_BUZZ;
+
+  // Section 3: Twin-Deck Steel Foundry, Spike Beds & Crate Vault (x 104..178)
+  fillRect(grid, 104, 13, 46, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 104, 24, 46, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[23][107] = TileType.CHECKPOINT;
+  grid[23][110] = TileType.MONITOR_RING;
+  for (let ry = 15; ry <= 23; ry++) grid[ry][105] = TileType.BREAKABLE_ROCK;
+  for (let cx = 108; cx <= 128; cx++) {
+    grid[24][cx] = cx % 2 === 0 ? TileType.GIMMICK_CONVEYOR_RIGHT : TileType.GIMMICK_CONVEYOR_LEFT;
+    grid[22][cx] = TileType.RING;
+  }
+  grid[24][130] = TileType.GIMMICK_STEAM_VENT;
+  grid[24][148] = TileType.GIMMICK_STEAM_VENT;
+  for (let sx = 136; sx <= 144; sx += 4) grid[24][sx] = TileType.SPIKES_UP;
+  fillRect(grid, 134, 18, 14, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 136; sx <= 144; sx += 4) grid[20][sx] = TileType.SPIKES_DOWN;
+  grid[23][152] = TileType.BADNIK_SPINY;
+  grid[23][156] = TileType.MONITOR_INVINCIBILITY;
+
+  // Breakable metal crate vault hiding a Giant Ring (secret room!)
+  fillRect(grid, 158, 17, 12, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 18; ry <= 23; ry++) {
+    for (let rx = 159; rx <= 168; rx++) grid[ry][rx] = TileType.EMPTY;
+    grid[ry][158] = TileType.BREAKABLE_ROCK;
+  }
+  grid[23][161] = TileType.GIANT_RING;
+  grid[23][164] = TileType.MONITOR_1UP;
+  grid[23][166] = TileType.RING;
+  grid[23][167] = TileType.RING;
+
+  // Section 4: Hydraulic Siphon Arena & Boss Battle (x 178..246)
+  fillRect(grid, 178, 22, 68, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[21][181] = TileType.CHECKPOINT;
+  grid[21][184] = TileType.MONITOR_RING;
+  grid[21][187] = TileType.BOOSTER_RIGHT;
+  for (let x = 190; x <= 196; x += 2) grid[20][x] = TileType.RING;
+  grid[21][197] = TileType.CHECKPOINT;
+
+  // High catwalks inside the arena: refuge from the Chemical Flood!
+  fillRect(grid, 199, 18, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  fillRect(grid, 211, 18, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  for (let x = 200; x <= 204; x += 2) grid[17][x] = TileType.RING;
+  for (let x = 212; x <= 216; x += 2) grid[17][x] = TileType.RING;
+
+  // Hydraulic Slime-Crusher & Siphon Mech (Act 2 Boss)
+  grid[18][207] = TileType.BOSS_CHEMICAL;
+
+  grid[21][236] = TileType.GOAL_POST;
+
+  return {
+    id: 'chemical-plant-act-2',
+    name: 'Chemical Plant',
+    act: 2,
+    author: 'Sonic Velocity Studio',
+    width,
+    height,
+    tilesetId: 'chemical-plant-zone',
+    grid,
+    p1Spawn: { x: 4, y: 21 },
+    p2Spawn: { x: 2, y: 21 },
+  };
+}
+
+// ============================================================================
+// LEVEL 11: MYSTIC CAVERNS ZONE — ACT 1
+// (Purple Spooky Caverns, Falling Stalactites, Bed & Ceiling Spikes,
+//  Vertical Elevators, Mine Cart Shafts & Breakable Rock Secret Vaults)
+// ============================================================================
+function buildMysticCavernsAct1(): LevelData {
+  const width = 234;
+  const height = 32;
+  const grid = createEmptyGrid(width, height);
+
+  // Section 1: Crystal Grotto Entrance with Stalactite-Dripped Roof (x 0..40)
+  fillRect(grid, 0, 0, 40, 18, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 0, 24, 40, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[23][4] = TileType.SPAWN_P1;
+  grid[23][2] = TileType.SPAWN_P2;
+  for (let x = 7; x <= 15; x++) grid[22][x] = TileType.RING;
+  grid[23][17] = TileType.MONITOR_SHIELD;
+  grid[22][20] = TileType.BADNIK_BATBRAIN;
+  for (let sx = 10; sx <= 34; sx += 6) grid[18][sx] = TileType.GIMMICK_STALACTITE;
+  for (let sx = 24; sx <= 30; sx++) grid[24][sx] = TileType.SPIKES_UP; // Floor spike bed
+  for (let x = 24; x <= 30; x += 2) grid[21][x] = TileType.RING;
+
+  // Section 2: Mine Cart Elevator Shaft & Breakable Rock Vault (x 40..96)
+  fillRect(grid, 40, 0, 56, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 40, 24, 56, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  // Vertical elevator shaft carved up into the rock
+  for (let ry = 12; ry <= 23; ry++) {
+    for (let rx = 55; rx <= 66; rx++) grid[ry][rx] = TileType.EMPTY;
+  }
+  grid[19][58] = TileType.MOVING_PLATFORM_VERT;
+  grid[21][63] = TileType.MOVING_PLATFORM_VERT;
+  grid[12][61] = TileType.RING;
+  grid[14][61] = TileType.RING;
+  grid[16][61] = TileType.RING;
+  grid[22][55] = TileType.CHECKPOINT;
+  // Breakable rock wall hiding a secret vault with a Giant Ring
+  fillRect(grid, 70, 18, 12, 6, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 19; ry <= 22; ry++) {
+    for (let rx = 71; rx <= 80; rx++) grid[ry][rx] = TileType.EMPTY;
+    grid[ry][70] = TileType.BREAKABLE_ROCK;
+  }
+  grid[23][74] = TileType.GIANT_RING;
+  grid[23][77] = TileType.MONITOR_RING;
+  grid[21][68] = TileType.BADNIK_CATERKILLER;
+
+  // Section 3: Low Ceiling Spike Corridor & Mine Cart Shaft (x 96..152)
+  fillRect(grid, 96, 0, 56, 14, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 96, 23, 56, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[22][99] = TileType.CHECKPOINT;
+  for (let sx = 104; sx <= 138; sx += 3) grid[22][sx] = TileType.SPIKES_UP;
+  for (let sx = 105; sx <= 139; sx += 3) grid[18][sx] = TileType.SPIKES_DOWN;
+  for (let sx = 106; sx <= 136; sx += 6) grid[14][sx] = TileType.GIMMICK_STALACTITE;
+  fillRect(grid, 100, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  fillRect(grid, 110, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  fillRect(grid, 120, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  fillRect(grid, 130, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  for (let x = 101; x <= 104; x++) grid[16][x] = TileType.RING;
+  grid[16][124] = TileType.BADNIK_BATBRAIN;
+  grid[22][146] = TileType.BADNIK_CATERKILLER;
+  grid[21][150] = TileType.SPRING_RED;
+
+  // Section 4: Deep Cavern Descent, Second Elevator Shaft & Finale (x 152..234)
+  fillRect(grid, 152, 0, 82, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 152, 25, 82, 7, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 10; ry <= 24; ry++) {
+    for (let rx = 160; rx <= 170; rx++) grid[ry][rx] = TileType.EMPTY;
+  }
+  grid[21][163] = TileType.MOVING_PLATFORM_VERT;
+  grid[12][167] = TileType.RING;
+  grid[14][164] = TileType.RING;
+  grid[24][158] = TileType.CHECKPOINT;
+  // Shaft exit ledge
+  fillRect(grid, 171, 20, 8, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[19][174] = TileType.RING;
+  grid[19][176] = TileType.MONITOR_BUBBLE;
+  // Rocky overhang dripping stalactites down onto the spike beds below
+  fillRect(grid, 178, 13, 24, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 182; sx <= 198; sx += 8) grid[15][sx] = TileType.GIMMICK_STALACTITE;
+  for (let sx = 186; sx <= 200; sx += 5) grid[25][sx] = TileType.SPIKES_UP;
+  grid[24][204] = TileType.BADNIK_CATERKILLER;
+  grid[24][208] = TileType.MONITOR_INVINCIBILITY;
+  fillRect(grid, 212, 21, 10, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let x = 210; x <= 216; x += 2) grid[20][x] = TileType.RING;
+  grid[24][226] = TileType.GOAL_POST;
+
+  return {
+    id: 'mystic-caverns-act-1',
+    name: 'Mystic Caverns',
+    act: 1,
+    author: 'Sonic Velocity Studio',
+    width,
+    height,
+    tilesetId: 'mystic-caverns',
+    grid,
+    p1Spawn: { x: 4, y: 23 },
+    p2Spawn: { x: 2, y: 23 },
+  };
+}
+
+// ============================================================================
+// LEVEL 12: MYSTIC CAVERNS ZONE — ACT 2
+// (Egg Drill-Crusher — Drill Charge, Wall-Crash Stun 115 Frames,
+//  Ceiling Burrow Tremors & Ground Slam Shockwaves)
+// ============================================================================
+function buildMysticCavernsAct2(): LevelData {
+  const width = 240;
+  const height = 32;
+  const grid = createEmptyGrid(width, height);
+
+  // Section 1: Spooky Purple Grotto & Falling Stalactite Run (x 0..44)
+  fillRect(grid, 0, 0, 44, 17, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 0, 24, 44, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[23][4] = TileType.SPAWN_P1;
+  grid[23][2] = TileType.SPAWN_P2;
+  for (let x = 7; x <= 14; x++) grid[22][x] = TileType.RING;
+  grid[23][16] = TileType.MONITOR_FLAME;
+  grid[23][18] = TileType.MONITOR_SPEED;
+  for (let sx = 9; sx <= 39; sx += 5) grid[17][sx] = TileType.GIMMICK_STALACTITE;
+  grid[22][22] = TileType.BADNIK_BATBRAIN;
+  for (let sx = 28; sx <= 34; sx += 2) grid[24][sx] = TileType.SPIKES_UP;
+
+  // Section 2: Mine Cart Shaft, Elevator Ascent & Rock Vault (x 44..104)
+  fillRect(grid, 44, 0, 60, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 44, 25, 60, 7, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 11; ry <= 24; ry++) {
+    for (let rx = 52; rx <= 62; rx++) grid[ry][rx] = TileType.EMPTY;
+  }
+  grid[21][55] = TileType.MOVING_PLATFORM_VERT;
+  grid[14][59] = TileType.RING;
+  grid[12][59] = TileType.RING;
+  fillRect(grid, 63, 19, 8, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[18][66] = TileType.CHECKPOINT;
+  // Breakable rock vault hiding a Giant Ring
+  fillRect(grid, 74, 17, 14, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let ry = 18; ry <= 23; ry++) {
+    for (let rx = 75; rx <= 86; rx++) grid[ry][rx] = TileType.EMPTY;
+    grid[ry][74] = TileType.BREAKABLE_ROCK;
+  }
+  grid[23][78] = TileType.GIANT_RING;
+  grid[23][81] = TileType.MONITOR_INVINCIBILITY;
+  grid[23][84] = TileType.RING;
+  grid[23][85] = TileType.RING;
+  grid[24][92] = TileType.BADNIK_CATERKILLER;
+  for (let sx = 94; sx <= 100; sx += 3) grid[24][sx] = TileType.SPIKES_UP;
+  fillRect(grid, 93, 19, 12, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  for (let sx = 95; sx <= 101; sx += 3) grid[21][sx] = TileType.SPIKES_DOWN;
+
+  // Section 3: Crystal Chasm Crossing with Stalactites & Steam Bridge (x 104..176)
+  fillRect(grid, 104, 0, 72, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 104, 28, 72, 4, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
+  for (let px = 108; px <= 172; px += 9) {
+    fillRect(grid, px, 20, 5, 1, TileType.PLATFORM, TileType.PLATFORM);
+    grid[18][px + 2] = TileType.RING;
+  }
+  grid[16][112] = TileType.BADNIK_BATBRAIN;
+  for (let sx = 120; sx <= 160; sx += 8) grid[10][sx] = TileType.GIMMICK_STALACTITE;
+  grid[19][140] = TileType.GIMMICK_DASH_RING;
+  grid[20][156] = TileType.MONITOR_LIGHTNING;
+  grid[24][130] = TileType.CHECKPOINT; // Rest pillar inside the chasm
+  fillRect(grid, 128, 24, 5, 4, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 164, 16, 8, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[15][168] = TileType.GIANT_RING;
+
+  // Section 4: Reinforced Drill-Crusher Arena (x 176..240)
+  // Solid cavern roof the drill can burrow up into for its Ceiling Burrow tremors!
+  fillRect(grid, 176, 0, 64, 10, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  fillRect(grid, 176, 21, 64, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[20][179] = TileType.CHECKPOINT;
+  grid[20][182] = TileType.MONITOR_RING;
+  grid[20][186] = TileType.BOOSTER_RIGHT;
+  for (let x = 190; x <= 196; x += 2) grid[19][x] = TileType.RING;
+  grid[20][198] = TileType.CHECKPOINT;
+  // Dodge catwalks under the burrow ceiling
+  fillRect(grid, 187, 16, 7, 1, TileType.PLATFORM, TileType.PLATFORM);
+  fillRect(grid, 213, 16, 7, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[15][190] = TileType.RING;
+  grid[15][216] = TileType.RING;
+
+  // Egg Drill-Crusher (Act 2 Boss)
+  grid[16][204] = TileType.BOSS_MYSTIC;
+
+  grid[20][232] = TileType.GOAL_POST;
+
+  return {
+    id: 'mystic-caverns-act-2',
+    name: 'Mystic Caverns',
+    act: 2,
+    author: 'Sonic Velocity Studio',
+    width,
+    height,
+    tilesetId: 'mystic-caverns',
+    grid,
+    p1Spawn: { x: 4, y: 23 },
+    p2Spawn: { x: 2, y: 23 },
+  };
+}
+
+// Sequential Campaign Order: Emerald Mountains → Marble Zone → Mystic Caverns
+// → Chemical Plant → Neo Starlight → Hill Top Peaks → Death Egg Zone.
+// "Broken Test 01" stays LAST and is only reachable via the Active Zone & Act selector.
 export const DEFAULT_LEVELS: LevelData[] = [
   buildEmeraldMountainsAct1(),
   buildEmeraldMountainsAct2(),
   buildMarbleZoneAct1(),
   buildMarbleZoneAct2(),
+  buildMysticCavernsAct1(),
+  buildMysticCavernsAct2(),
+  buildChemicalPlantAct1(),
+  buildChemicalPlantAct2(),
   buildNeoStarlightAct1(),
   buildNeoStarlightAct2(),
   buildHillTopPeaksAct1(),
@@ -2180,6 +2892,49 @@ export const DEFAULT_LEVELS: LevelData[] = [
   buildDeathEggZone(),
   buildBrokenTest01(),
 ];
+
+/** Canonical campaign progression ids (Act 1 -> Act 2 per zone, in zone order). */
+export const CAMPAIGN_ORDER: string[] = DEFAULT_LEVELS.map((l) => l.id);
+
+/**
+ * Keeps the level list in canonical campaign order:
+ * Emerald Mountains -> Marble Zone -> Mystic Caverns -> Chemical Plant ->
+ * Neo Starlight -> Hill Top Peaks -> Death Egg Zone, with any user-authored
+ * stages (or built-in stages the player deleted) preserved just before the
+ * finale. "Broken Test 01" always stays dead last so it is only reachable
+ * through the Active Zone & Act selector.
+ */
+export function orderCampaignLevels(list: LevelData[]): LevelData[] {
+  const defaultDeathEgg =
+    DEFAULT_LEVELS.find((l) => l.id === 'death-egg-zone') ||
+    DEFAULT_LEVELS[DEFAULT_LEVELS.length - 2];
+  const defaultBrokenTest = DEFAULT_LEVELS.find((l) => l.id === 'broken-test-01');
+  const foundDeathEgg = list.find((l) => l.id === 'death-egg-zone');
+  const existingDeathEgg =
+    foundDeathEgg && foundDeathEgg.width >= 232 ? foundDeathEgg : defaultDeathEgg;
+  const existingBrokenTest =
+    list.find((l) => l.id === 'broken-test-01') || defaultBrokenTest;
+
+  const byId = new Map(list.map((l) => [l.id, l]));
+  const ordered: LevelData[] = [];
+  for (const id of CAMPAIGN_ORDER) {
+    if (id === 'broken-test-01' || id === 'death-egg-zone') continue;
+    const found = byId.get(id);
+    if (found) ordered.push(found);
+    byId.delete(id);
+  }
+  const userStages = list.filter(
+    (l) =>
+      byId.has(l.id) &&
+      l.id !== 'emerald-mountains-act-3' &&
+      l.id !== 'death-egg-zone' &&
+      l.id !== 'broken-test-01'
+  );
+
+  return existingBrokenTest
+    ? [...ordered, ...userStages, existingDeathEgg, existingBrokenTest]
+    : [...ordered, ...userStages, existingDeathEgg];
+}
 
 /**
  * Builds the 7 Unique, 3x-Larger, Harder Special Stages (Stages 1..7):
