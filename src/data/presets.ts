@@ -2919,7 +2919,14 @@ export function orderCampaignLevels(list: LevelData[]): LevelData[] {
   const ordered: LevelData[] = [];
   for (const id of CAMPAIGN_ORDER) {
     if (id === 'broken-test-01' || id === 'death-egg-zone') continue;
-    const found = byId.get(id);
+    const defaultLevel = DEFAULT_LEVELS.find((d) => d.id === id);
+    // Explicitly replace Mystic Caverns & Chemical Plant with the latest canonical versions
+    const isTargetReplaced =
+      id === 'mystic-caverns-act-1' ||
+      id === 'mystic-caverns-act-2' ||
+      id === 'chemical-plant-act-1' ||
+      id === 'chemical-plant-act-2';
+    const found = isTargetReplaced ? defaultLevel : (byId.get(id) || defaultLevel);
     if (found) ordered.push(found);
     byId.delete(id);
   }

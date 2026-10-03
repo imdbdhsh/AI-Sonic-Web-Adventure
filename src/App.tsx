@@ -38,8 +38,8 @@ type ActiveWorkspaceTab =
   | 'multiplayer';
 
 const STORAGE_KEYS = {
-  LEVELS: 'sonic_velocity_levels_v16',
-  TILESETS: 'sonic_velocity_tilesets_v15',
+  LEVELS: 'sonic_velocity_levels_v17',
+  TILESETS: 'sonic_velocity_tilesets_v16',
   SPECIAL_STAGES: 'sonic_velocity_special_stages_v11',
   EMERALDS: 'sonic_velocity_emeralds_v11',
   SUPER_EMERALDS: 'sonic_velocity_super_emeralds_v11',
@@ -61,7 +61,19 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEYS.TILESETS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((t: TilesetConfig) => t.id));
+          const missingDefaults = DEFAULT_TILESETS.filter(
+            (def) => !existingIds.has(def.id)
+          );
+          const updated = parsed.map((ts: TilesetConfig) => {
+            if (ts.id === 'chemical-plant-zone' || ts.id === 'mystic-caverns') {
+              return DEFAULT_TILESETS.find((d) => d.id === ts.id) || ts;
+            }
+            return ts;
+          });
+          return [...updated, ...missingDefaults];
+        }
       }
     } catch {
       // Fallback to default tilesets
