@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Copy, Download, Upload, Volume2, VolumeX, X } from 'lucide-react';
 import { SfxPatchKey, soundFX } from './audio/soundEngine';
 import { AudioStudio } from './components/AudioStudio';
+import { BackgroundEditor } from './components/BackgroundEditor';
+import { BossEditor } from './components/BossEditor';
 import { GameStage } from './components/GameStage';
 import { LevelEditor } from './components/LevelEditor';
 import { MultiplayerGuide } from './components/MultiplayerGuide';
@@ -32,13 +34,15 @@ type ActiveWorkspaceTab =
   | 'play'
   | 'play-game'
   | 'editor'
+  | 'boss-editor'
+  | 'bg-editor'
   | 'special'
   | 'audio'
   | 'tilesets'
   | 'multiplayer';
 
 const STORAGE_KEYS = {
-  LEVELS: 'sonic_velocity_levels_v19',
+  LEVELS: 'sonic_velocity_levels_v20',
   TILESETS: 'sonic_velocity_tilesets_v17',
   SPECIAL_STAGES: 'sonic_velocity_special_stages_v11',
   EMERALDS: 'sonic_velocity_emeralds_v11',
@@ -87,7 +91,23 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return orderCampaignLevels(parsed);
+          const updated = parsed.map((lvl: LevelData) => {
+            if (
+              lvl.id === 'mystic-caverns-act-1' ||
+              lvl.id === 'mystic-caverns-act-2' ||
+              lvl.id === 'broken-test-01' ||
+              lvl.id === 'chemical-plant-act-1' ||
+              lvl.id === 'chemical-plant-act-2'
+            ) {
+              const def = DEFAULT_LEVELS.find((d) => d.id === lvl.id);
+              if (def) return def;
+            }
+            if (lvl.id === 'mystic-caverns-act-2' && !lvl.name.includes('(Broken)')) {
+              return { ...lvl, name: `${lvl.name} (Broken)` };
+            }
+            return lvl;
+          });
+          return orderCampaignLevels(updated);
         }
       }
     } catch {
@@ -168,9 +188,13 @@ export default function App() {
   const [campaignLevelId, setCampaignLevelId] = useState<string>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CAMPAIGN_LEVEL_ID);
+      if (saved === 'mystic-caverns-act-2') {
+        return 'chemical-plant-act-1';
+      }
       if (
         saved &&
         saved !== 'broken-test-01' &&
+        saved !== 'mystic-caverns-act-2' &&
         DEFAULT_LEVELS.some((l) => l.id === saved)
       ) {
         return saved;
@@ -218,8 +242,13 @@ export default function App() {
 
   const [p1Character, setP1Character] = useState<CharacterId>('sonic');
   const [p2Character, setP2Character] = useState<CharacterId>('tails');
-  const [multiplayerMode, setMultiplayerMode] =
-    useState<MultiplayerMode>('solo_ai');
+  const [multiplayerMode, setMultiplayerMode] = useState<MultiplayerMode>(() => {
+    try {
+      const saved = localStorage.getItem('sonic_multiplayer_mode');
+      if (saved) return saved as MultiplayerMode;
+    } catch {}
+    return 'single'; // Default to single character ("no Tails") as requested
+  });
   const [splitOrientation, setSplitOrientation] =
     useState<SplitOrientation>('horizontal');
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -264,6 +293,14 @@ export default function App() {
       // Ignore quota errors
     }
   }, [specialStages]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sonic_multiplayer_mode', multiplayerMode);
+    } catch {
+      // Ignore quota errors
+    }
+  }, [multiplayerMode]);
 
   useEffect(() => {
     try {
@@ -390,12 +427,18 @@ export default function App() {
       const stagePackage: CustomStagePackage = {
         packageFormat: 'sonic_velocity_custom_stage_v1',
         exportedAt: new Date().toISOString(),
-        level: targetLevel,
+        level: {
+          ...targetLevel,
+          customBosses: targetLevel.customBosses,
+          customBackground: targetLevel.customBackground,
+        },
         activeTileset: targetTileset,
         tilesets,
         audio: {
           sfxPatches: soundFX.getPatches(),
         },
+        customBosses: targetLevel.customBosses,
+        customBackground: targetLevel.customBackground,
       };
 
       const safeSlug = targetLevel.name
@@ -501,12 +544,23 @@ export default function App() {
               ? `custom-stage-${Date.now().toString().slice(-5)}`
               : rawLevel.id;
 
+          const customBosses =
+            (parsed.level && parsed.level.customBosses) ||
+            parsed.customBosses ||
+            rawLevel.customBosses;
+          const customBackground =
+            (parsed.level && parsed.level.customBackground) ||
+            parsed.customBackground ||
+            rawLevel.customBackground;
+
           const importedLevel: LevelData = {
             ...rawLevel,
             id: importedId,
             name: rawLevel.name || 'Imported Custom Zone',
             act: Math.max(1, Number(rawLevel.act) || 1),
             author: rawLevel.author || 'Custom Stage Creator',
+            customBosses: customBosses || undefined,
+            customBackground: customBackground || undefined,
           };
 
           setLevels((prev) => {
@@ -532,6 +586,12 @@ export default function App() {
           }
           if (restoredAudio) {
             extras.push('edited SFX sounds');
+          }
+          if (customBosses && Array.isArray(customBosses) && customBosses.length > 0) {
+            extras.push('custom boss AI & code');
+          }
+          if (customBackground) {
+            extras.push('custom background');
           }
           setPackageNotice(
             `Imported stage "${importedLevel.name} (Act ${importedLevel.act})"${
@@ -834,6 +894,8 @@ export default function App() {
               ['play', 'Play Zone'],
               ['play-game', 'Play Game (No Cheats)'],
               ['editor', 'Level Editor'],
+              ['boss-editor', 'Custom Boss Studio'],
+              ['bg-editor', 'Background Studio'],
               ['special', 'Special Stages (S1 & S3)'],
               ['audio', 'SFX Sound Editor'],
               ['tilesets', 'Custom Tileset Studio'],
@@ -1098,6 +1160,34 @@ export default function App() {
             onToggleAllEmeralds={handleToggleAllEmeralds}
             onReturnToZone={handleReturnFromSpecialStage}
           />
+        )}
+
+        {activeTab === 'boss-editor' && (
+          <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+            <BossEditor
+              level={levels.find((l) => l.id === activeLevelId) || levels[0]}
+              onUpdateLevel={handleUpdateLevel}
+              onClose={() => setActiveTab('editor')}
+            />
+          </div>
+        )}
+
+        {activeTab === 'bg-editor' && (
+          <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+            <BackgroundEditor
+              level={levels.find((l) => l.id === activeLevelId) || levels[0]}
+              activeTileset={
+                tilesets.find(
+                  (t) =>
+                    t.id ===
+                    (levels.find((l) => l.id === activeLevelId) || levels[0])
+                      .tilesetId
+                ) || tilesets[0]
+              }
+              onUpdateLevel={handleUpdateLevel}
+              onClose={() => setActiveTab('editor')}
+            />
+          </div>
         )}
 
         {activeTab === 'audio' && <AudioStudio />}

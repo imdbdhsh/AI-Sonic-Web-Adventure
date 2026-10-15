@@ -1,5 +1,6 @@
 import { soundFX } from '../audio/soundEngine';
 import { CHARACTER_SPECS } from '../data/presets';
+import { DEFAULT_CUSTOM_BOSS, DEFAULT_BOSS_HITBOX } from '../data/bossPresets';
 import {
   ActiveBadnik,
   ActiveBoss,
@@ -145,8 +146,12 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
       (t) => t === TileType.BOSS_SILVER_SONIC || t === TileType.BOSS_DEATH_EGG_ROBOT
     )
   );
-  // Bosses appear in Act 2 in each standard zone, and in Death Egg Zone!
-  if (level.act !== 2 && level.id !== 'death-egg-zone' && !hasDeathEggBoss) return [];
+  const hasCustomBoss =
+    level.grid.some((row) => row.some((t) => t === TileType.BOSS_CUSTOM)) ||
+    (Boolean(level.customBosses) && level.customBosses!.length > 0);
+
+  // Bosses appear in Act 2 in each standard zone, in Death Egg Zone, and anytime a custom boss is designed/placed!
+  if (level.act !== 2 && level.id !== 'death-egg-zone' && !hasDeathEggBoss && !hasCustomBoss) return [];
 
   const list: ActiveBoss[] = [];
   for (let y = 0; y < level.height; y++) {
@@ -160,34 +165,49 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
         tile === TileType.BOSS_CHEMICAL ||
         tile === TileType.BOSS_MYSTIC ||
         tile === TileType.BOSS_SILVER_SONIC ||
-        tile === TileType.BOSS_DEATH_EGG_ROBOT
+        tile === TileType.BOSS_DEATH_EGG_ROBOT ||
+        tile === TileType.BOSS_CUSTOM
       ) {
         const px = x * TILE_SIZE + 16;
         const py = y * TILE_SIZE + 16;
-        const bossType: ActiveBoss['bossType'] =
-          tile === TileType.BOSS_MARBLE
-            ? 'marble'
-            : tile === TileType.BOSS_STARLIGHT
-            ? 'starlight'
-            : tile === TileType.BOSS_HILLTOP
-            ? 'hilltop'
-            : tile === TileType.BOSS_CHEMICAL
-            ? 'chemical'
-            : tile === TileType.BOSS_MYSTIC
-            ? 'mystic'
-            : tile === TileType.BOSS_SILVER_SONIC
-            ? 'silversonic'
-            : tile === TileType.BOSS_DEATH_EGG_ROBOT
-            ? 'deathegg'
-            : 'eggman';
+        const isCustomTile = tile === TileType.BOSS_CUSTOM;
+        const customConfig = isCustomTile
+          ? level.customBosses && level.customBosses.length > 0
+            ? level.customBosses[0]
+            : DEFAULT_CUSTOM_BOSS
+          : undefined;
+
+        const bossType: ActiveBoss['bossType'] = isCustomTile
+          ? 'custom'
+          : tile === TileType.BOSS_MARBLE
+          ? 'marble'
+          : tile === TileType.BOSS_STARLIGHT
+          ? 'starlight'
+          : tile === TileType.BOSS_HILLTOP
+          ? 'hilltop'
+          : tile === TileType.BOSS_CHEMICAL
+          ? 'chemical'
+          : tile === TileType.BOSS_MYSTIC
+          ? 'mystic'
+          : tile === TileType.BOSS_SILVER_SONIC
+          ? 'silversonic'
+          : tile === TileType.BOSS_DEATH_EGG_ROBOT
+          ? 'deathegg'
+          : 'eggman';
         const isFinalBoss = bossType === 'deathegg';
         const isSilverSonic = bossType === 'silversonic';
         const isMechDuo = bossType === 'chemical' || bossType === 'mystic';
-        const maxHp = isFinalBoss ? 24 : isMechDuo ? 10 : 8;
+        const maxHp = customConfig
+          ? customConfig.hp
+          : isFinalBoss
+          ? 24
+          : isMechDuo
+          ? 10
+          : 8;
 
-        // Locate the arena floor: first solid tile straight below the boss post
-        let mechFloorY = py + 3 * TILE_SIZE;
-        for (let fy = y + 1; fy < level.height; fy++) {
+        // Locate the arena floor: first solid tile at or below the boss column
+        let mechFloorY = (level.height - 2) * TILE_SIZE;
+        for (let fy = y; fy < level.height; fy++) {
           if (isSolidTile(level.grid[fy][x] as TileType)) {
             mechFloorY = fy * TILE_SIZE;
             break;
@@ -202,23 +222,40 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
           }
         }
 
+        // Prevent custom bosses from being inside the ground!
+        let bossY = py;
+        if (isCustomTile && customConfig) {
+          const bScale = customConfig.scale || 1.0;
+          if (customConfig.movementAI === 'deathegg_mech') {
+            bossY = mechFloorY - Math.round(bScale * 44);
+          } else if (customConfig.movementAI === 'silversonic_dash') {
+            bossY = mechFloorY - Math.round(bScale * 26);
+          } else {
+            const maxAirY = mechFloorY - Math.round(Math.max(68, bScale * 76));
+            bossY = Math.min(py, maxAirY);
+          }
+        }
+
+        const arenaRadius = customConfig
+          ? customConfig.arenaRadius || 340
+          : isSilverSonic
+          ? 544
+          : isFinalBoss
+          ? 640
+          : 280;
+
         const mechStartPhase: MechBossPhase =
           bossType === 'chemical' ? 'mech_advance' : 'drill_rev';
         list.push({
           id: `boss_${x}_${y}`,
           bossType,
+          customConfig: customConfig ? { ...customConfig } : undefined,
           x: px,
-          y: py,
+          y: bossY,
           startX: px,
-          startY: py,
-          arenaLeft: Math.max(
-            32,
-            px - (isSilverSonic ? 544 : isFinalBoss ? 640 : 280)
-          ),
-          arenaRight: Math.min(
-            level.width * TILE_SIZE - 32,
-            px + (isSilverSonic ? 320 : isFinalBoss ? 288 : 280)
-          ),
+          startY: bossY,
+          arenaLeft: Math.max(32, px - arenaRadius),
+          arenaRight: Math.min(level.width * TILE_SIZE - 32, px + arenaRadius),
           engaged: false,
           vx: -2.2,
           vy: 0,
@@ -233,7 +270,7 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
           phaseTimer: 0,
           targetReticleActive: false,
           targetReticleX: px,
-          targetReticleY: py + 16,
+          targetReticleY: bossY + 16,
           targetReticleLocked: false,
           armsLaunched: 0,
           mechPhase: isMechDuo ? mechStartPhase : undefined,
@@ -253,6 +290,69 @@ export function spawnBossesFromGrid(level: LevelData): ActiveBoss[] {
       }
     }
   }
+
+  // If level has customBosses defined but no boss tile was placed in grid, auto-spawn at right side of level
+  if (list.length === 0 && level.customBosses && level.customBosses.length > 0) {
+    const cfg = level.customBosses[0];
+    const spawnX = Math.max(12, level.width - 14) * TILE_SIZE + 16;
+    const colX = Math.floor(spawnX / TILE_SIZE);
+    let floorY = (level.height - 2) * TILE_SIZE;
+    for (let fy = 2; fy < level.height; fy++) {
+      if (isSolidTile(level.grid[fy][colX] as TileType)) {
+        floorY = fy * TILE_SIZE;
+        break;
+      }
+    }
+    const bScale = cfg.scale || 1.0;
+    let spawnY: number;
+    if (cfg.movementAI === 'deathegg_mech') {
+      spawnY = floorY - Math.round(bScale * 44);
+    } else if (cfg.movementAI === 'silversonic_dash') {
+      spawnY = floorY - Math.round(bScale * 26);
+    } else {
+      spawnY = floorY - Math.round(Math.max(68, bScale * 76));
+    }
+    const aRad = cfg.arenaRadius || 340;
+    list.push({
+      id: `boss_custom_${cfg.id}`,
+      bossType: 'custom',
+      customConfig: { ...cfg },
+      x: spawnX,
+      y: spawnY,
+      startX: spawnX,
+      startY: spawnY,
+      arenaLeft: Math.max(32, spawnX - aRad),
+      arenaRight: Math.min(level.width * TILE_SIZE - 32, spawnX + aRad),
+      engaged: false,
+      vx: -2.2,
+      vy: 0,
+      facing: -1,
+      hp: cfg.hp,
+      maxHp: cfg.hp,
+      invulnTimer: 0,
+      ballSwingAngle: 0,
+      attackTimer: 0,
+      alive: true,
+      phaseTimer: 0,
+      targetReticleActive: false,
+      targetReticleX: spawnX,
+      targetReticleY: spawnY + 16,
+      targetReticleLocked: false,
+      armsLaunched: 0,
+      mechFloorY: floorY,
+      mechCeilingY: 0,
+      mechVulnerable: false,
+      overheatFrames: 0,
+      floodLevel: 0,
+      vortexActive: false,
+      vortexStrength: 0,
+      stunFrames: 0,
+      drillSpinning: false,
+      ceilingBurrow: false,
+      slamLanded: false,
+    });
+  }
+
   return list;
 }
 
@@ -495,7 +595,6 @@ function getTileSurfaceInfo(
     case TileType.CUSTOM_BLOCK_8:
     case TileType.CUSTOM_BLOCK_9:
     case TileType.CUSTOM_BLOCK_10:
-    case TileType.SPIKES_DOWN:
     case TileType.GIMMICK_ACID_POOL:
     case TileType.GIMMICK_STEAM_VENT:
     case TileType.ONE_WAY_DOOR_LOCKED: {
@@ -819,12 +918,176 @@ function killPlayerInVoid(player: PlayerEntity, ctx: StepContext) {
   );
 }
 
+export function killPlayerInChemicals(player: PlayerEntity, ctx: StepContext) {
+  if (player.state === 'victory') return;
+
+  // Touching Chemical Plant toxic chemicals is an INSTANT DEATH — even if you have a Shield or Invincibility!
+  soundFX.playLavaBurn();
+  soundFX.playRingLoss();
+  soundFX.playPop();
+
+  player.isSuper = false;
+  player.isHyper = false;
+  player.superRingTimer = 60;
+  player.hyperFlashUsed = false;
+  player.shield = 'none';
+  player.invincibleTimer = 0;
+  player.speedShoesTimer = 0;
+  player.rings = 0;
+  player.nextExtraLifeRingThreshold = 100;
+
+  if (!player.isAI && player.id === 1) {
+    player.lives = Math.max(0, (player.lives ?? 3) - 1);
+    player.livesDeltaThisFrame = (player.livesDeltaThisFrame || 0) - 1;
+    if (player.lives <= 0) {
+      player.gameOverTriggered = true;
+    }
+  }
+
+  // Cyan chemical splash & toxic vapor bubbles
+  for (let s = 0; s < 10; s++) {
+    addParticle(
+      ctx.particles,
+      'smoke',
+      player.x + (Math.random() - 0.5) * 28,
+      player.y + (Math.random() - 0.5) * 18,
+      (Math.random() - 0.5) * 2.8,
+      -2.5 - Math.random() * 3,
+      '#0284C7',
+      7,
+      28
+    );
+    addParticle(
+      ctx.particles,
+      'sparkle',
+      player.x + (Math.random() - 0.5) * 24,
+      player.y + (Math.random() - 0.5) * 18,
+      (Math.random() - 0.5) * 3.6,
+      -3 - Math.random() * 2.5,
+      '#38BDF8',
+      6,
+      24
+    );
+  }
+
+  player.x = player.checkpointX;
+  player.y = player.checkpointY;
+  player.vx = 0;
+  player.vy = 0;
+  player.gsp = 0;
+  player.groundAngle = 0;
+  player.onGround = false;
+  player.inLoop = false;
+  player.loopCooldown = 30;
+  player.hurtTimer = 90;
+  player.state = 'idle';
+
+  addParticle(
+    ctx.particles,
+    'score_popup',
+    player.x,
+    player.y - 24,
+    0,
+    -1.2,
+    '#38BDF8',
+    13,
+    50,
+    player.lives <= 0 ? 'GAME OVER!' : `CHEMICAL TOXIC DEATH! (${player.lives} LIVES LEFT)`
+  );
+}
+
 // ============================================================================
 // CHEMICAL PLANT TRAVEL TUBES
-// The player falls into a Tube Intake and is carried through the glass pipe
-// network before being launched out of a Tube Exit nozzle.
+// The player falls or gets sucked into a Tube Intake and is propelled through
+// curved glass pipelines at sonic speeds before launching out of an Exit nozzle.
 // ============================================================================
-function findTubeExit(
+export function buildTubeRoutePoints(
+  entryTx: number,
+  entryTy: number,
+  exitTx: number,
+  exitTy: number
+): Array<{ x: number; y: number }> {
+  const entryCx = entryTx * TILE_SIZE + 16;
+  const entryCy = entryTy * TILE_SIZE + 16;
+  const exitCx = exitTx * TILE_SIZE + 16;
+  const exitCy = exitTy * TILE_SIZE + 16;
+  const dirToExit: 1 | -1 = exitCx >= entryCx ? 1 : -1;
+
+  // Intermediate vertical drop channel: flows downward then horizontally toward the exit nozzle
+  const minDropY = entryCy + TILE_SIZE * 2.5;
+  const channelY = exitCy > entryCy
+    ? Math.max(minDropY, exitCy - TILE_SIZE * 2)
+    : minDropY;
+
+  // Key primary trajectory waypoints with dynamic rollercoaster undulations
+  const dist = Math.abs(exitCx - entryCx);
+  const rawWaypoints: Array<{ x: number; y: number }> = [
+    { x: entryCx, y: entryCy },
+    { x: entryCx, y: channelY },
+  ];
+
+  if (dist > 280) {
+    // Add Chemical Plant's signature pneumatic rollercoaster bends!
+    rawWaypoints.push(
+      { x: entryCx + dirToExit * (dist * 0.35), y: channelY + 32 },
+      { x: entryCx + dirToExit * (dist * 0.65), y: channelY - 24 }
+    );
+  }
+
+  rawWaypoints.push(
+    { x: exitCx, y: channelY },
+    { x: exitCx, y: exitCy },
+    { x: exitCx + dirToExit * 8, y: exitCy - 18 }
+  );
+
+  // Apply smooth rounded fillets at corners (subdividing 90-degree corners into smooth 4-step arcs)
+  const smoothed: Array<{ x: number; y: number }> = [];
+  smoothed.push(rawWaypoints[0]);
+
+  for (let i = 1; i < rawWaypoints.length - 1; i++) {
+    const prev = rawWaypoints[i - 1];
+    const curr = rawWaypoints[i];
+    const next = rawWaypoints[i + 1];
+
+    const d1x = curr.x - prev.x;
+    const d1y = curr.y - prev.y;
+    const len1 = Math.hypot(d1x, d1y);
+
+    const d2x = next.x - curr.x;
+    const d2y = next.y - curr.y;
+    const len2 = Math.hypot(d2x, d2y);
+
+    if (len1 < 10 || len2 < 10) {
+      smoothed.push(curr);
+      continue;
+    }
+
+    const maxR = Math.min(22, len1 * 0.45, len2 * 0.45);
+    const pStart = {
+      x: curr.x - (d1x / len1) * maxR,
+      y: curr.y - (d1y / len1) * maxR,
+    };
+    const pEnd = {
+      x: curr.x + (d2x / len2) * maxR,
+      y: curr.y + (d2y / len2) * maxR,
+    };
+
+    smoothed.push(pStart);
+    for (let t = 0.25; t <= 0.75; t += 0.25) {
+      const inv = 1 - t;
+      smoothed.push({
+        x: inv * inv * pStart.x + 2 * inv * t * curr.x + t * t * pEnd.x,
+        y: inv * inv * pStart.y + 2 * inv * t * curr.y + t * t * pEnd.y,
+      });
+    }
+    smoothed.push(pEnd);
+  }
+
+  smoothed.push(rawWaypoints[rawWaypoints.length - 1]);
+  return smoothed;
+}
+
+export function findTubeExit(
   ctx: StepContext,
   entryTx: number,
   entryTy: number
@@ -837,7 +1100,7 @@ function findTubeExit(
       if (tx === entryTx && ty === entryTy) continue;
       // Prefer exits to the right & ahead of the intake, then nearest by distance
       const dx = tx - entryTx;
-      const score = Math.abs(dx) + Math.abs(ty - entryTy) * 1.25 + (dx < 0 ? 200 : 0);
+      const score = Math.abs(dx) + Math.abs(ty - entryTy) * 1.25 + (dx < 0 ? 300 : 0);
       if (score < bestScore) {
         bestScore = score;
         best = { x: tx * TILE_SIZE + 16, y: ty * TILE_SIZE + 16, tx, ty };
@@ -857,45 +1120,55 @@ function startTubeTravel(
   if (!exit) return;
   const entryCx = entryTx * TILE_SIZE + 16;
   const entryCy = entryTy * TILE_SIZE + 16;
-  // The horizontal transport channel runs 2 tiles below the intake mouth
-  const channelY = (entryTy + 2) * TILE_SIZE + 16;
   const dirToExit: 1 | -1 = exit.x >= entryCx ? 1 : -1;
+
+  const points = buildTubeRoutePoints(entryTx, entryTy, exit.tx, exit.ty);
+
   const travel: TubeTravelState = {
-    points: [
-      { x: entryCx, y: entryCy },
-      { x: entryCx, y: channelY },
-      { x: exit.x, y: channelY },
-      { x: exit.x, y: exit.y },
-      { x: exit.x, y: exit.y - TILE_SIZE * 0.5 },
-    ],
+    points,
     segment: 0,
-    speed: 15.5,
-    exitVx: 7.2 * dirToExit,
-    exitVy: -12.6,
+    speed: 25.5, // Thrilling high-speed pneumatic travel
+    exitVx: 13.8 * dirToExit,
+    exitVy: -14.6, // High dramatic arc launch
     entryX: entryCx,
     entryY: entryCy,
   };
   player.tubeTravel = travel;
-  player.tubeCooldown = 40;
+  player.tubeCooldown = 50;
   player.vx = 0;
   player.vy = 0;
   player.gsp = 0;
   player.onGround = false;
   player.state = 'roll';
   player.inLoop = false;
+  soundFX.playTubeWhoosh(1.1);
   soundFX.playSpinDashRelease();
-  addParticle(ctx.particles, 'sparkle', entryCx, entryCy, 0, -2, '#38BDF8', 8, 22);
+
+  // Suction burst particles
+  for (let s = 0; s < 6; s++) {
+    addParticle(
+      ctx.particles,
+      'sparkle',
+      entryCx + (Math.random() - 0.5) * 16,
+      entryCy + (Math.random() - 0.5) * 16,
+      (Math.random() - 0.5) * 3,
+      2 + Math.random() * 2,
+      '#38BDF8',
+      7,
+      20
+    );
+  }
   addParticle(
     ctx.particles,
     'score_popup',
     entryCx,
     entryCy - 18,
     0,
-    -1.1,
+    -1.2,
     '#38BDF8',
-    11,
-    34,
-    'TRAVEL TUBE!'
+    12,
+    38,
+    'TUBE SUCTION!'
   );
 }
 
@@ -924,18 +1197,27 @@ function updateTubeTravel(player: PlayerEntity, ctx: StepContext): boolean {
     player.y += (dy / dist) * travel.speed;
   }
 
-  // Glass pipe chemical bubbles trailing behind Sonic
-  if (Math.random() < 0.5) {
+  // Rapid Sonic roll state inside the glass pipe
+  player.state = 'roll';
+  player.onGround = false;
+
+  // Whoosh sound resonance during transit
+  if (travel.segment % 4 === 1 && Math.random() < 0.4) {
+    soundFX.playTubeWhoosh(1.0 + (travel.segment / travel.points.length) * 0.35);
+  }
+
+  // Trailing glowing chemical fluid bubbles & speed rings inside the pipe
+  if (Math.random() < 0.75) {
     addParticle(
       ctx.particles,
       'sparkle',
-      player.x + (Math.random() - 0.5) * 12,
-      player.y + (Math.random() - 0.5) * 12,
-      -travel.exitVx * 0.25,
-      0.6,
+      player.x + (Math.random() - 0.5) * 14,
+      player.y + (Math.random() - 0.5) * 14,
+      (Math.random() - 0.5) * 1.5,
+      (Math.random() - 0.5) * 1.5,
       Math.random() < 0.5 ? '#7DD3FC' : '#38BDF8',
-      5,
-      16
+      6,
+      18
     );
   }
   return true;
@@ -953,22 +1235,39 @@ function finishTubeTravel(player: PlayerEntity, ctx: StepContext) {
   player.facing = travel.exitVx >= 0 ? 1 : -1;
   player.onGround = false;
   player.inLoop = false;
-  player.state = 'spring';
+  player.state = 'roll';
   player.tubeTravel = null;
-  player.tubeCooldown = 40;
+  player.tubeCooldown = 45;
+
   soundFX.playSpring(true);
-  addParticle(ctx.particles, 'pop', player.x, player.y, 0, 0, '#38BDF8', 22, 20);
+  soundFX.playTubeWhoosh(1.35);
+
+  // Big launch burst
+  addParticle(ctx.particles, 'pop', player.x, player.y, 0, 0, '#38BDF8', 26, 24);
+  for (let s = 0; s < 8; s++) {
+    addParticle(
+      ctx.particles,
+      'sparkle',
+      player.x,
+      player.y,
+      (Math.random() - 0.5) * 6,
+      -3 - Math.random() * 5,
+      '#7DD3FC',
+      6,
+      26
+    );
+  }
   addParticle(
     ctx.particles,
     'score_popup',
     player.x,
-    player.y - 22,
+    player.y - 24,
     0,
-    -1.2,
+    -1.3,
     '#7DD3FC',
-    12,
-    40,
-    'TUBE LAUNCH!'
+    13,
+    45,
+    'PNEUMATIC TUBE LAUNCH!'
   );
 }
 
@@ -1816,9 +2115,9 @@ export function updatePlayerPhysics(
     }
   }
 
-  // 6. Integrate Velocity & Resolve Collisions (Substepped for uncapped Hyper speeds!)
+  // 6. Integrate Velocity & Resolve Collisions (Substepped for high speeds & Hyper form!)
   const maxStepVel = Math.max(Math.abs(player.vx), Math.abs(player.vy));
-  const substeps = Math.max(1, Math.min(10, Math.ceil(maxStepVel / 11)));
+  const substeps = Math.max(1, Math.min(12, Math.ceil(maxStepVel / 6)));
   for (let s = 0; s < substeps; s++) {
     const prevSubX = player.x;
     player.x += player.vx / substeps;
@@ -1940,7 +2239,10 @@ function resolveHorizontalCollision(player: PlayerEntity, ctx: StepContext) {
         player.character === 'knuckles' ||
         player.state === 'roll' ||
         player.state === 'spindash' ||
-        (player.state === 'dash' && Math.abs(player.vx) >= 4.5);
+        player.state === 'dash' ||
+        player.state === 'peelout' ||
+        Math.abs(player.gsp) >= 4.2 ||
+        Math.abs(player.vx) >= 4.2;
       if (canSmash) {
         ctx.grid[ty][tx] = TileType.EMPTY;
         soundFX.playPop();
@@ -1969,11 +2271,9 @@ function resolveHorizontalCollision(player: PlayerEntity, ctx: StepContext) {
       }
     }
 
-    // Boiling Toxic Blue Chemical Pools: any shield protects the player!
-    if (hitTile === TileType.GIMMICK_ACID_POOL && !isChemicallyShielded(player)) {
-      soundFX.playLavaBurn();
-      addParticle(ctx.particles, 'smoke', player.x, player.y, 0, -2, '#38BDF8', 6, 18);
-      hurtPlayer(player, ctx);
+    // Boiling Toxic Blue Chemical Pools: INSTA KILL even if you have a Shield!
+    if (hitTile === TileType.GIMMICK_ACID_POOL) {
+      killPlayerInChemicals(player, ctx);
       return;
     }
 
@@ -1992,7 +2292,6 @@ function resolveHorizontalCollision(player: PlayerEntity, ctx: StepContext) {
       hitTile === TileType.SPIKES_UP ||
       hitTile === TileType.SPIKES_DOWN ||
       hitTile === TileType.LAVA ||
-      hitTile === TileType.GIMMICK_ACID_POOL ||
       hitTile === TileType.GIMMICK_STEAM_VENT ||
       hitTile === TileType.GIMMICK_CRUSHER ||
       hitTile === TileType.GIMMICK_LAVA_SHOOTER_LEFT ||
@@ -2049,6 +2348,10 @@ function resolveVerticalCollision(player: PlayerEntity, ctx: StepContext) {
     ) {
       player.y = (ty + 1) * TILE_SIZE + PLAYER_HALF_H;
       player.vy = 0;
+      if (ceilTile === TileType.GIMMICK_ACID_POOL) {
+        killPlayerInChemicals(player, ctx);
+        return;
+      }
       if (ceilTile === TileType.GIMMICK_CRUSHER) {
         hurtPlayer(player, ctx);
       }
@@ -2109,14 +2412,11 @@ function resolveVerticalCollision(player: PlayerEntity, ctx: StepContext) {
     player.onGround = true;
 
     if (bestSurface.tile === TileType.SPIKES_UP) {
-      hurtPlayer(player, ctx, true);
-      return;
-    }
-
-    // Mystic Caverns bed spikes / Chemical Plant floor hazards land as spikes too
-    if (bestSurface.tile === TileType.SPIKES_DOWN) {
-      hurtPlayer(player, ctx, true);
-      return;
+      // Only damage player if they actually landed on or stepped into the spike bed
+      if (player.onGround || footY >= bestSurface.surfaceY - 4) {
+        hurtPlayer(player, ctx, true);
+        return;
+      }
     }
 
     // Chemical Plant Steam Vents: periodic pressure burst launches players skyward!
@@ -2147,40 +2447,10 @@ function resolveVerticalCollision(player: PlayerEntity, ctx: StepContext) {
       }
     }
 
-    // Boiling Toxic Blue Chemical Pools (any shield blocks the damage)
+    // Boiling Toxic Blue Chemical Pools: INSTA KILL even if you have a Shield!
     if (bestSurface.tile === TileType.GIMMICK_ACID_POOL) {
-      if (isChemicallyShielded(player)) {
-        if (Math.abs(player.vx) > 0.5 && Math.random() < 0.35) {
-          addParticle(
-            ctx.particles,
-            'sparkle',
-            player.x + (Math.random() - 0.5) * 16,
-            player.y + 14,
-            -player.vx * 0.25,
-            -1.5 - Math.random(),
-            '#38BDF8',
-            5,
-            16
-          );
-        }
-      } else {
-        soundFX.playLavaBurn();
-        for (let e = 0; e < 5; e++) {
-          addParticle(
-            ctx.particles,
-            'smoke',
-            player.x + (Math.random() - 0.5) * 18,
-            player.y + 12,
-            (Math.random() - 0.5) * 3,
-            -2 - Math.random() * 2,
-            '#0EA5E9',
-            6,
-            20
-          );
-        }
-        hurtPlayer(player, ctx);
-        return;
-      }
+      killPlayerInChemicals(player, ctx);
+      return;
     }
 
     // Neo Starlight Conveyor Belt Gimmick pushes grounded player!
@@ -2507,7 +2777,11 @@ function collectNearbyTiles(player: PlayerEntity, ctx: StepContext) {
     player.state === 'glide' ||
     player.state === 'hammer_drop' ||
     player.state === 'ray_glide' ||
-    player.state === 'dropdash_ready';
+    player.state === 'dropdash_ready' ||
+    player.state === 'dash' ||
+    player.state === 'peelout' ||
+    Math.abs(player.gsp) >= 5.0 ||
+    Math.abs(player.vx) >= 5.0;
 
   for (let ty = minTy; ty <= maxTy; ty++) {
     for (let tx = minTx; tx <= maxTx; tx++) {
@@ -2855,7 +3129,15 @@ function collectNearbyTiles(player: PlayerEntity, ctx: StepContext) {
         case TileType.GIMMICK_CRUSHER: {
           // Marble Zone Stomping Crusher Pillar bottom spikes hazard
           const crusherExtend = Math.sin(ctx.elapsedMs * 0.005 + tx * 1.3);
-          if (crusherExtend > 0.2 && player.y > tileCenterY) {
+          const extensionPx = Math.max(0, crusherExtend) * 28;
+          const crusherBottomY = (ty + 1) * TILE_SIZE + extensionPx;
+          const playerTopY = player.y - PLAYER_HALF_H;
+          if (
+            crusherExtend > 0.35 &&
+            Math.abs(player.x - tileCenterX) < 14 &&
+            playerTopY <= crusherBottomY + 4 &&
+            player.y >= crusherBottomY - 12
+          ) {
             hurtPlayer(player, ctx);
           }
           break;
@@ -2881,9 +3163,18 @@ function collectNearbyTiles(player: PlayerEntity, ctx: StepContext) {
           break;
         }
         case TileType.GIMMICK_TUBE_ENTRY: {
-          // Chemical Plant Travel Tube: fall into the intake & ride the pipe network!
+          // Chemical Plant Travel Tube: suction intake pulls player in from above, sides or inside mouth!
+          const dx = Math.abs(player.x - tileCenterX);
+          const dy = player.y - tileCenterY;
           if (!player.tubeTravel && (player.tubeCooldown || 0) <= 0) {
-            startTubeTravel(player, ctx, tx, ty);
+            if (dx < 28 && dy >= -36 && dy <= 28) {
+              startTubeTravel(player, ctx, tx, ty);
+              break;
+            } else if (dx < 48 && dy >= -52 && dy <= 32) {
+              // Gentle magnetic suction pulling toward tube mouth
+              player.x += (tileCenterX - player.x) * 0.4;
+              player.vx *= 0.65;
+            }
           }
           break;
         }
@@ -2910,32 +3201,36 @@ function collectNearbyTiles(player: PlayerEntity, ctx: StepContext) {
           break;
         }
         case TileType.SPIKES_DOWN: {
-          // Ceiling Spikes: brush against the stalactite bed and take a hit
+          // Ceiling Spikes: only damage if the player's head actually contacts the spike tips
+          const spikeBottomY = (ty + 1) * TILE_SIZE;
+          const playerTopY = player.y - PLAYER_HALF_H;
           if (
-            Math.abs(player.x - tileCenterX) < 20 &&
-            Math.abs(player.y - tileCenterY) < 22
+            Math.abs(player.x - tileCenterX) < 14 &&
+            playerTopY <= spikeBottomY + 2 &&
+            player.y > tileCenterY
           ) {
             hurtPlayer(player, ctx, true);
           }
           break;
         }
         case TileType.GIMMICK_ACID_POOL: {
-          // Boiling Toxic Blue Chemical Pool: only shielded players swim safely
+          // Boiling Toxic Blue Chemical Pool: INSTA KILL even if you have a Shield!
           if (
-            Math.abs(player.x - tileCenterX) < 22 &&
-            Math.abs(player.y - tileCenterY) < 22 &&
-            !isChemicallyShielded(player)
+            Math.abs(player.x - tileCenterX) < 24 &&
+            Math.abs(player.y - tileCenterY) < 24
           ) {
-            soundFX.playLavaBurn();
-            hurtPlayer(player, ctx);
+            killPlayerInChemicals(player, ctx);
           }
           break;
         }
         case TileType.GIMMICK_STALACTITE: {
-          // Hanging rock stalactite brush = spike hit (before it even drops!)
+          // Hanging rock stalactite brush: only damage if player's head touches hanging rock
+          const stalactiteBottomY = (ty + 1) * TILE_SIZE;
+          const playerTopY = player.y - PLAYER_HALF_H;
           if (
-            Math.abs(player.x - tileCenterX) < 20 &&
-            Math.abs(player.y - tileCenterY) < 22
+            Math.abs(player.x - tileCenterX) < 14 &&
+            playerTopY <= stalactiteBottomY + 2 &&
+            player.y > tileCenterY
           ) {
             hurtPlayer(player, ctx, true);
           }
@@ -3040,8 +3335,14 @@ function collectNearbyTiles(player: PlayerEntity, ctx: StepContext) {
 
 function interactWithBadniks(player: PlayerEntity, ctx: StepContext) {
   const isInvulnerableAttack = player.isSuper || player.invincibleTimer > 0;
+  const isHighSpeedSprint =
+    player.state === 'dash' ||
+    player.state === 'peelout' ||
+    Math.abs(player.gsp) >= 5.0 ||
+    Math.abs(player.vx) >= 5.0;
   const isSpinAttacking =
     isInvulnerableAttack ||
+    isHighSpeedSprint ||
     player.state === 'jump' ||
     player.state === 'roll' ||
     player.state === 'spindash' ||
@@ -3207,13 +3508,12 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
     if (!boss.alive) continue;
 
     // Engage Boss Arena Lock when a human player enters the arena!
-    if (
-      !boss.engaged &&
-      !player.isAI &&
+    const inArena =
       player.x >= boss.arenaLeft &&
       player.x <= boss.arenaRight &&
-      Math.abs(player.y - boss.startY) < 280
-    ) {
+      Math.abs(player.y - boss.startY) < 320;
+
+    if (!boss.engaged && !player.isAI && inArena) {
       boss.engaged = true;
       addParticle(
         ctx.particles,
@@ -3225,12 +3525,130 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
         '#EF4444',
         14,
         55,
-        boss.bossType === 'silversonic'
+        boss.customConfig
+          ? `${boss.customConfig.name.toUpperCase()} ENGAGED!`
+          : boss.bossType === 'silversonic'
           ? 'SILVER SONIC ACTIVATED!'
           : boss.bossType === 'deathegg'
           ? 'FINAL BOSS: DEATH EGG ROBOT!'
           : 'BOSS ARENA LOCKED!'
       );
+    }
+
+    // A boss that has not been engaged cannot damage or interact with the player!
+    if (!boss.engaged) {
+      continue;
+    }
+
+    // 0. Custom Boss Attached Bumpers & Lethal Spikes Hazards
+    if (boss.customConfig) {
+      const cfg = boss.customConfig;
+      const bScale = cfg.scale || 1.0;
+      const attach = cfg.attachments;
+      const bounciness = cfg.bumperBounciness || 12;
+
+      // Check Attached Bumpers (Deflects & Launches Player)
+      let hitBumper = false;
+      if (
+        attach.bumpersLeft &&
+        Math.hypot(player.x - (boss.x - 30 * bScale), player.y - boss.y) < 26 * bScale
+      ) {
+        hitBumper = true;
+        player.vx = -bounciness;
+        player.vy = -bounciness * 0.7;
+      } else if (
+        attach.bumpersRight &&
+        Math.hypot(player.x - (boss.x + 30 * bScale), player.y - boss.y) < 26 * bScale
+      ) {
+        hitBumper = true;
+        player.vx = bounciness;
+        player.vy = -bounciness * 0.7;
+      } else if (
+        attach.bumpersTop &&
+        Math.hypot(player.x - boss.x, player.y - (boss.y - 28 * bScale)) < 26 * bScale
+      ) {
+        hitBumper = true;
+        player.vy = -bounciness;
+        player.vx = (player.x < boss.x ? -1 : 1) * 6;
+      } else if (
+        attach.bumpersBottom &&
+        Math.hypot(player.x - boss.x, player.y - (boss.y + 24 * bScale)) < 26 * bScale
+      ) {
+        hitBumper = true;
+        player.vy = bounciness * 0.8;
+      }
+
+      if (hitBumper) {
+        player.onGround = false;
+        player.gsp = player.vx;
+        player.state = 'jump';
+        soundFX.playBumper();
+        player.score += 10;
+        addParticle(ctx.particles, 'sparkle', player.x, player.y, 0, -1, '#38BDF8', 16, 25);
+        addParticle(
+          ctx.particles,
+          'score_popup',
+          player.x,
+          player.y - 14,
+          0,
+          -1,
+          '#38BDF8',
+          11,
+          28,
+          '+10 BUMPER!'
+        );
+        continue;
+      }
+
+      // Check Attached Spikes (Lethal damage unless Super / Invincible)
+      // Only damage when player actually contacts the spike attachment coordinates on the boss chassis
+      let hitSpike = false;
+      if (!player.isSuper && player.invincibleTimer === 0) {
+        if (
+          attach.spikesTop &&
+          Math.hypot(player.x - boss.x, player.y - (boss.y - 28 * bScale)) < 24 * bScale
+        ) {
+          hitSpike = true;
+        } else if (
+          attach.spikesBottom &&
+          Math.hypot(player.x - boss.x, player.y - (boss.y + 24 * bScale)) < 24 * bScale
+        ) {
+          hitSpike = true;
+        } else if (
+          attach.spikesFront &&
+          Math.hypot(
+            player.x - (boss.x + boss.facing * (28 * bScale)),
+            player.y - boss.y
+          ) < 24 * bScale
+        ) {
+          hitSpike = true;
+        } else if (
+          attach.spikesRear &&
+          Math.hypot(
+            player.x - (boss.x - boss.facing * (28 * bScale)),
+            player.y - boss.y
+          ) < 24 * bScale
+        ) {
+          hitSpike = true;
+        }
+      }
+
+      if (hitSpike) {
+        addParticle(
+          ctx.particles,
+          'score_popup',
+          player.x,
+          player.y - 20,
+          0,
+          -1.2,
+          '#EF4444',
+          12,
+          32,
+          'SPIKED BY BOSS!'
+        );
+        hurtPlayer(player, ctx);
+        continue;
+      }
     }
 
     // 1. Check collision with Boss Under-Attachment / Spike / Claw Hazards!
@@ -3551,12 +3969,9 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
           player.x >= boss.arenaLeft - 20 && player.x <= boss.arenaRight + 20;
         if (
           inArena &&
-          player.y + PLAYER_HALF_H > surfaceY &&
-          !isChemicallyShielded(player)
+          player.y + PLAYER_HALF_H > surfaceY
         ) {
-          soundFX.playLavaBurn();
-          addParticle(ctx.particles, 'smoke', player.x, player.y + 10, 0, -2, '#38BDF8', 7, 20);
-          hurtPlayer(player, ctx);
+          killPlayerInChemicals(player, ctx);
           continue;
         }
       }
@@ -3816,7 +4231,7 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
       ) {
         hurtPlayer(player, ctx);
       }
-    } else {
+    } else if (boss.bossType === 'eggman') {
       // Standard Wrecking Ball Boss: Swinging Checkered Wrecking Ball
       const ballX = boss.x + Math.sin(boss.ballSwingAngle) * 58;
       const ballY = boss.y + Math.cos(boss.ballSwingAngle) * 58;
@@ -3825,11 +4240,30 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
       }
     }
 
-    // 2. Check collision with Boss Core / Cockpit / Torso
+    // 2. Check collision with Boss Core / Weak Point Hitbox & Contact Hurtbox
+    const hitbox = boss.customConfig?.hitbox;
+    const bScale = boss.customConfig ? (boss.customConfig.scale || 1.0) : 1.0;
     const coreY = boss.y;
-    const hitRadius = boss.bossType === 'silversonic' ? 26 : 30;
-    const distToPod = Math.hypot(player.x - boss.x, player.y - coreY);
-    if (distToPod < hitRadius) {
+    const weakX = hitbox ? boss.x + (hitbox.coreOffsetX || 0) * bScale * boss.facing : boss.x;
+    const weakY = hitbox ? boss.y + (hitbox.coreOffsetY || 0) * bScale : coreY;
+    const weakRadius = hitbox
+      ? (hitbox.coreRadius || 28) * bScale
+      : boss.customConfig
+      ? bScale * 28
+      : boss.bossType === 'silversonic'
+      ? 26
+      : 30;
+
+    const contactX = hitbox ? boss.x + (hitbox.contactOffsetX || 0) * bScale * boss.facing : boss.x;
+    const contactY = hitbox ? boss.y + (hitbox.contactOffsetY || 0) * bScale : coreY;
+    const contactRadius = hitbox
+      ? (hitbox.contactDamageRadius || 26) * bScale
+      : weakRadius * 0.95;
+
+    const distToWeak = Math.hypot(player.x - weakX, player.y - weakY);
+    const distToContact = Math.hypot(player.x - contactX, player.y - contactY);
+
+    if (distToWeak < weakRadius) {
       if (isAttacking) {
         if (boss.invulnTimer === 0) {
           // Hyper Forms deal 2x damage to bosses!
@@ -3877,6 +4311,63 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
                 34
               );
             }
+
+            if (boss.customConfig) {
+              const reward = boss.customConfig.defeatReward;
+              if (reward === 'ring_shower_20') {
+                for (let r = 0; r < 20; r++) {
+                  const ang = (r / 20) * Math.PI * 2;
+                  const spd = 2.5 + Math.random() * 4.5;
+                  ctx.scatteredRings.push({
+                    id: Math.floor(Math.random() * 1000000),
+                    x: boss.x,
+                    y: coreY,
+                    vx: Math.cos(ang) * spd,
+                    vy: Math.sin(ang) * spd - 3,
+                    timer: 300,
+                  });
+                }
+                addParticle(
+                  ctx.particles,
+                  'score_popup',
+                  boss.x,
+                  coreY - 44,
+                  0,
+                  -1,
+                  '#FACC15',
+                  13,
+                  60,
+                  '+20 RINGS SHOWER!'
+                );
+              } else if (reward === 'giant_ring') {
+                addParticle(
+                  ctx.particles,
+                  'score_popup',
+                  boss.x,
+                  coreY - 44,
+                  0,
+                  -1,
+                  '#F59E0B',
+                  14,
+                  75,
+                  'SPECIAL STAGE RING UNLOCKED!'
+                );
+              } else if (reward === 'chaos_emerald') {
+                addParticle(
+                  ctx.particles,
+                  'score_popup',
+                  boss.x,
+                  coreY - 44,
+                  0,
+                  -1,
+                  '#10B981',
+                  14,
+                  75,
+                  'CHAOS EMERALD RECOVERED!'
+                );
+              }
+            }
+
             addParticle(
               ctx.particles,
               'score_popup',
@@ -3887,7 +4378,9 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
               '#FACC15',
               14,
               65,
-              boss.bossType === 'silversonic'
+              boss.customConfig
+                ? `${boss.customConfig.name.toUpperCase()} DEFEATED +1000!`
+                : boss.bossType === 'silversonic'
                 ? 'SILVER SONIC DEFEATED +1000!'
                 : boss.bossType === 'marble'
                 ? 'MARBLE BOSS DEFEATED +1000!'
@@ -3899,6 +4392,15 @@ function interactWithBosses(player: PlayerEntity, ctx: StepContext) {
             );
           }
         }
+      } else {
+        hurtPlayer(player, ctx);
+      }
+    } else if (distToContact < contactRadius) {
+      if (isAttacking && (player.isSuper || player.invincibleTimer > 0)) {
+        player.vx = (player.x < contactX ? -1 : 1) * 4.5;
+        player.vy = -4.5;
+        player.gsp = player.vx;
+        addParticle(ctx.particles, 'sparkle', player.x, player.y, -player.vx * 0.3, -1.5, '#FACC15', 6, 16);
       } else {
         hurtPlayer(player, ctx);
       }
@@ -3964,6 +4466,11 @@ function interactWithHazards(player: PlayerEntity, ctx: StepContext) {
 }
 
 function interactWithProjectiles(player: PlayerEntity, ctx: StepContext) {
+  const isCurledSpin =
+    player.state === 'roll' ||
+    player.state === 'spindash' ||
+    player.state === 'dropdash_ready';
+
   for (let i = ctx.projectiles.length - 1; i >= 0; i--) {
     const proj = ctx.projectiles[i];
     const dist = Math.hypot(player.x - proj.x, player.y - proj.y);
@@ -3973,9 +4480,14 @@ function interactWithProjectiles(player: PlayerEntity, ctx: StepContext) {
         player.invincibleTimer > 0 ||
         player.shield === 'flame' ||
         player.shield === 'lightning' ||
-        player.shield === 'bubble'
+        player.shield === 'bubble' ||
+        (isCurledSpin &&
+          Math.abs(player.gsp) >= 4.5 &&
+          proj.kind !== 'deathegg_claw' &&
+          proj.kind !== 'deathegg_bomb')
       ) {
         ctx.projectiles.splice(i, 1);
+        soundFX.playPop();
         addParticle(ctx.particles, 'sparkle', proj.x, proj.y, -proj.vx * 0.5, -2, '#38BDF8', 6, 15);
       } else {
         ctx.projectiles.splice(i, 1);
@@ -4396,8 +4908,251 @@ export function updateWorldEntities(ctx: StepContext) {
   // Update Dr. Eggman Bosses
   for (const boss of ctx.bosses) {
     if (!boss.alive) continue;
+    // Keep unengaged bosses idle at their home position until player arrives at the arena
+    if (!boss.engaged) {
+      boss.x = boss.startX;
+      boss.y = boss.startY;
+      continue;
+    }
     if (boss.invulnTimer > 0) boss.invulnTimer--;
     boss.attackTimer++;
+
+    // Custom Boss AI Movement & Weapon Attacks
+    if (boss.customConfig) {
+      const cfg = boss.customConfig;
+      const target = ctx.players[0];
+      const leftBound = boss.arenaLeft + 44;
+      const rightBound = boss.arenaRight - 44;
+      const spd = cfg.moveSpeed || 3.5;
+
+      // 1. Movement AI Patterns
+      if (cfg.movementAI === 'silversonic_dash') {
+        const cycle = boss.attackTimer % 240;
+        if (cycle < 70) {
+          boss.x += boss.facing * (spd * 1.2);
+          boss.y = boss.startY;
+          boss.ballSwingAngle = 0;
+          if (boss.x <= leftBound) {
+            boss.x = leftBound;
+            boss.facing = 1;
+          } else if (boss.x >= rightBound) {
+            boss.x = rightBound;
+            boss.facing = -1;
+          }
+        } else if (cycle < 120) {
+          boss.y = boss.startY;
+          if (target) boss.facing = (target.x >= boss.x ? 1 : -1) as 1 | -1;
+        } else if (cycle < 180) {
+          boss.x += boss.facing * (spd * 1.4);
+          boss.y = boss.startY - Math.abs(Math.sin((cycle - 120) * 0.15)) * 28;
+          boss.ballSwingAngle += 0.45;
+          if (boss.x <= leftBound) {
+            boss.x = leftBound;
+            boss.facing = 1;
+          } else if (boss.x >= rightBound) {
+            boss.x = rightBound;
+            boss.facing = -1;
+          }
+        } else {
+          const leapProgress = (cycle - 180) / 60;
+          boss.x += boss.facing * spd;
+          boss.y = boss.startY - Math.sin(leapProgress * Math.PI) * 96;
+          boss.ballSwingAngle += 0.35;
+          if (boss.x <= leftBound) {
+            boss.x = leftBound;
+            boss.facing = 1;
+          } else if (boss.x >= rightBound) {
+            boss.x = rightBound;
+            boss.facing = -1;
+          }
+        }
+      } else if (cfg.movementAI === 'bounce_frenzy') {
+        if (!boss.vx || Math.abs(boss.vx) < 1) boss.vx = spd * boss.facing;
+        if (!boss.vy || Math.abs(boss.vy) < 1) boss.vy = spd * 0.8;
+        boss.x += boss.vx;
+        boss.y += boss.vy;
+        if (boss.x <= leftBound) {
+          boss.x = leftBound;
+          boss.vx = Math.abs(boss.vx);
+          boss.facing = 1;
+          soundFX.playBumper();
+        } else if (boss.x >= rightBound) {
+          boss.x = rightBound;
+          boss.vx = -Math.abs(boss.vx);
+          boss.facing = -1;
+          soundFX.playBumper();
+        }
+        if (boss.y <= boss.startY - 110) {
+          boss.y = boss.startY - 110;
+          boss.vy = Math.abs(boss.vy);
+          soundFX.playBumper();
+        } else if (boss.y >= boss.startY + 50) {
+          boss.y = boss.startY + 50;
+          boss.vy = -Math.abs(boss.vy);
+          soundFX.playBumper();
+        }
+      } else if (cfg.movementAI === 'sine_patrol') {
+        boss.x += boss.facing * spd;
+        boss.y = boss.startY + Math.sin(boss.attackTimer * 0.08) * 36;
+        if (boss.x <= leftBound) {
+          boss.x = leftBound;
+          boss.facing = 1;
+        } else if (boss.x >= rightBound) {
+          boss.x = rightBound;
+          boss.facing = -1;
+        }
+      } else if (cfg.movementAI === 'drill_charge') {
+        const cycle = boss.attackTimer % 180;
+        if (cycle < 60) {
+          boss.ballSwingAngle += 0.6;
+          if (target) boss.facing = (target.x >= boss.x ? 1 : -1) as 1 | -1;
+        } else if (cycle < 130) {
+          boss.x += boss.facing * (spd * 1.5);
+          boss.ballSwingAngle += 0.8;
+          if (boss.x <= leftBound) {
+            boss.x = leftBound;
+            boss.facing = 1;
+          } else if (boss.x >= rightBound) {
+            boss.x = rightBound;
+            boss.facing = -1;
+          }
+        } else {
+          boss.y = boss.startY - Math.sin(((cycle - 130) / 50) * Math.PI) * 40;
+        }
+      } else if (cfg.movementAI === 'chemical_piston') {
+        const cycle = boss.attackTimer % 200;
+        if (cycle < 80) {
+          boss.x += boss.facing * (spd * 0.8);
+          if (boss.x <= leftBound) {
+            boss.x = leftBound;
+            boss.facing = 1;
+          } else if (boss.x >= rightBound) {
+            boss.x = rightBound;
+            boss.facing = -1;
+          }
+        } else if (cycle < 140) {
+          boss.y = boss.startY + Math.sin((cycle - 80) * 0.1) * 32;
+        } else {
+          boss.y = boss.startY;
+          if (target) boss.facing = (target.x >= boss.x ? 1 : -1) as 1 | -1;
+        }
+      } else if (cfg.movementAI === 'magma_dropper') {
+        boss.x += boss.facing * spd;
+        boss.y = boss.startY + Math.sin(boss.attackTimer * 0.06) * 26;
+        if (boss.x <= leftBound) {
+          boss.x = leftBound;
+          boss.facing = 1;
+        } else if (boss.x >= rightBound) {
+          boss.x = rightBound;
+          boss.facing = -1;
+        }
+      } else {
+        // Classic Eggmobile hover
+        boss.x += boss.facing * spd;
+        boss.y = boss.startY + Math.sin(boss.attackTimer * 0.05) * 20;
+        boss.ballSwingAngle = Math.sin(boss.attackTimer * 0.08) * 0.4;
+        if (boss.x <= leftBound) {
+          boss.x = leftBound;
+          boss.facing = 1;
+        } else if (boss.x >= rightBound) {
+          boss.x = rightBound;
+          boss.facing = -1;
+        }
+      }
+
+      // Guarantee custom bosses never dip into the floor
+      const bScale = cfg.scale || 1.0;
+      let minFloorClearance = Math.round(bScale * 26);
+      if (cfg.movementAI === 'deathegg_mech') {
+        minFloorClearance = Math.round(bScale * 44);
+      } else if (cfg.movementAI === 'silversonic_dash') {
+        minFloorClearance = Math.round(bScale * 26);
+      } else {
+        minFloorClearance = Math.round(Math.max(50, bScale * 58));
+      }
+      const safeFloorY = (boss.mechFloorY || (boss.startY + 64)) - minFloorClearance;
+      if (boss.y > safeFloorY) {
+        boss.y = safeFloorY;
+        if (boss.vy && boss.vy > 0) boss.vy = -Math.abs(boss.vy);
+      }
+
+      // 2. Offensive Weapon Attacks
+      const interval = Math.max(25, cfg.attackInterval || 80);
+      if (
+        boss.attackTimer % interval === 0 &&
+        target &&
+        Math.hypot(target.x - boss.x, target.y - boss.y) < 550
+      ) {
+        if (cfg.attackType === 'plasma_fire') {
+          soundFX.playLaser();
+          ctx.projectiles.push({
+            id: nextProjectileId++,
+            x: boss.x + boss.facing * 18,
+            y: boss.y,
+            vx: boss.facing * 5.2,
+            vy: (target.y - boss.y) * 0.015,
+            color: cfg.glowColor || '#38BDF8',
+            radius: 7,
+            life: 90,
+          });
+        } else if (cfg.attackType === 'magma_bomb') {
+          soundFX.playLavaBurn();
+          ctx.projectiles.push({
+            id: nextProjectileId++,
+            x: boss.x,
+            y: boss.y + 20,
+            vx: boss.facing * 1.5,
+            vy: 4.8,
+            color: '#F97316',
+            radius: 8,
+            life: 80,
+          });
+        } else if (cfg.attackType === 'spikes_radial') {
+          soundFX.playSpinDashRelease();
+          for (let s = 0; s < 6; s++) {
+            const ang = (s / 6) * Math.PI * 2;
+            ctx.projectiles.push({
+              id: nextProjectileId++,
+              x: boss.x,
+              y: boss.y,
+              vx: Math.cos(ang) * 4.6,
+              vy: Math.sin(ang) * 4.6,
+              color: cfg.primaryColor || '#CBD5E1',
+              radius: 6,
+              life: 85,
+            });
+          }
+        } else if (cfg.attackType === 'laser_sweep') {
+          soundFX.playLaser();
+          ctx.projectiles.push({
+            id: nextProjectileId++,
+            x: boss.x,
+            y: boss.y + 16,
+            vx: boss.facing * 6.5,
+            vy: 1.2,
+            color: '#EC4899',
+            radius: 8,
+            life: 70,
+          });
+        } else if (cfg.attackType === 'rocket_claws') {
+          soundFX.playSpring(false);
+          ctx.projectiles.push({
+            id: nextProjectileId++,
+            kind: 'deathegg_claw',
+            facing: boss.facing,
+            x: boss.x + boss.facing * 24,
+            y: boss.y,
+            vx: boss.facing * 5.0,
+            vy: 0,
+            color: cfg.secondaryColor || '#FACC15',
+            radius: 12,
+            life: 100,
+          });
+        }
+      }
+
+      continue;
+    }
 
     if (boss.bossType === 'marble') {
       // UNIQUE MARBLE ZONE BOSS: Dr. Eggman's Magma Fireball Dropper!
@@ -5650,6 +6405,22 @@ export function updateWorldEntities(ctx: StepContext) {
         continue;
       }
     }
+
+    // Stop projectiles if they collide with solid walls or terrain
+    const ptx = Math.floor(proj.x / TILE_SIZE);
+    const pty = Math.floor(proj.y / TILE_SIZE);
+    if (
+      ptx >= 0 &&
+      ptx < ctx.level.width &&
+      pty >= 0 &&
+      pty < ctx.level.height &&
+      isSolidTile(getTileAt(ctx.grid, ptx, pty))
+    ) {
+      addParticle(ctx.particles, 'sparkle', proj.x, proj.y, 0, -1, proj.color || '#FACC15', 5, 12);
+      ctx.projectiles.splice(i, 1);
+      continue;
+    }
+
     proj.life--;
     if (proj.life <= 0) {
       ctx.projectiles.splice(i, 1);

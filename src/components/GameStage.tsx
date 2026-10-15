@@ -99,6 +99,7 @@ interface HudTelemetry {
     | 'mystic'
     | 'silversonic'
     | 'deathegg'
+    | 'custom'
     | null;
   elapsedMs: number;
   actCleared: boolean;
@@ -356,7 +357,7 @@ export const GameStage: React.FC<GameStageProps> = ({
       scatteredRings: [],
       particles: [],
       hazards: [],
-      players: [p1, p2],
+      players: multiplayerMode === 'single' ? [p1] : [p1, p2],
       allEmeraldsCollected,
       allSuperEmeraldsCollected,
       elapsedMs: existingSession ? existingSession.elapsedMs : 0,
@@ -369,7 +370,7 @@ export const GameStage: React.FC<GameStageProps> = ({
 
       if (playerNum === 1) {
         const soloArrows =
-          multiplayerMode === 'solo_ai' &&
+          (multiplayerMode === 'single' || multiplayerMode === 'solo_ai') &&
           !k.has('Enter') &&
           !k.has('Slash') &&
           !k.has('Numpad0');
@@ -473,7 +474,10 @@ export const GameStage: React.FC<GameStageProps> = ({
         tick++;
         const bothFinished =
           p1.finishedTimeMs !== null &&
-          (p2.isAI || p2.finishedTimeMs !== null || multiplayerMode === 'versus_split');
+          (multiplayerMode === 'single' ||
+            p2.isAI ||
+            p2.finishedTimeMs !== null ||
+            multiplayerMode === 'versus_split');
 
         if (!bothFinished) {
           stepCtx.elapsedMs += 16.67;
@@ -498,7 +502,9 @@ export const GameStage: React.FC<GameStageProps> = ({
 
         if (!p1.gameOverTriggered) {
           updatePlayerPhysics(p1, in1, null, stepCtx);
-          updatePlayerPhysics(p2, in2, p1, stepCtx);
+          if (multiplayerMode !== 'single') {
+            updatePlayerPhysics(p2, in2, p1, stepCtx);
+          }
           updateWorldEntities(stepCtx);
         }
 
@@ -569,7 +575,9 @@ export const GameStage: React.FC<GameStageProps> = ({
           if (ctx) {
             const w = canvas.width;
             const h = canvas.height;
-            const playersList: PlayerEntity[] = [p1, p2];
+            ctx.clearRect(0, 0, w, h);
+            const playersList: PlayerEntity[] =
+              multiplayerMode === 'single' ? [p1] : [p1, p2];
 
             const isSplit =
               multiplayerMode === 'coop_split' || multiplayerMode === 'versus_split';
@@ -846,11 +854,26 @@ export const GameStage: React.FC<GameStageProps> = ({
     ? CHARACTER_SPECS[p1Character].hyperName
     : CHARACTER_SPECS[p1Character].superName;
 
-  const normalLevels = levels.filter((l) => l.id !== 'broken-test-01');
+  const normalLevels = levels.filter(
+    (l) => l.id !== 'broken-test-01' && l.id !== 'mystic-caverns-act-2'
+  );
   const currentActIndex = Math.max(
     0,
     normalLevels.findIndex((l) => l.id === activeLevel.id)
   );
+
+  // If entering campaign / noCheatsMode on Mystic Caverns Act 2, skip it to Chemical Plant Act 1
+  useEffect(() => {
+    if (noCheatsMode && activeLevel.id === 'mystic-caverns-act-2') {
+      const nextLvl =
+        normalLevels.find((l) => l.id === 'chemical-plant-act-1') ||
+        normalLevels[0];
+      if (nextLvl) {
+        onClearCheckpointSession(nextLvl.id);
+        onSelectLevel(nextLvl.id);
+      }
+    }
+  }, [noCheatsMode, activeLevel.id, normalLevels, onClearCheckpointSession, onSelectLevel]);
 
   return (
     <div className="max-w-[1420px] mx-auto px-6 py-5 space-y-4">
@@ -903,8 +926,10 @@ export const GameStage: React.FC<GameStageProps> = ({
                 {levels.map((lvl) => (
                   <option key={lvl.id} value={lvl.id}>
                     {lvl.id === 'broken-test-01'
-                      ? 'Emerald Heights — Act 3 (Bonus Tower)'
-                      : `${lvl.name} — Act ${lvl.act}`}
+                      ? 'Broken Test 01'
+                      : lvl.id === 'mystic-caverns-act-2' && !lvl.name.includes('(Broken)')
+                        ? `${lvl.name} (Broken) — Act ${lvl.act}`
+                        : `${lvl.name} — Act ${lvl.act}`}
                   </option>
                 ))}
               </select>
@@ -931,27 +956,34 @@ export const GameStage: React.FC<GameStageProps> = ({
             </div>
           </div>
 
-          {/* Player 2 Character Selector */}
-          <div>
-            <label className="block text-[11px] text-slate-400">
-              Player 2 (Arrows + Enter)
-            </label>
-            <div className="mt-0.5 flex items-center gap-1 bg-[#0B0F19] p-1 rounded-lg border border-slate-800">
-              {(['sonic', 'tails', 'knuckles', 'mighty', 'ray'] as CharacterId[]).map((cid) => (
-                <button
-                  key={cid}
-                  onClick={() => onChangeP2Character(cid)}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded capitalize transition-colors cursor-pointer ${
-                    p2Character === cid
-                      ? 'bg-amber-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {cid}
-                </button>
-              ))}
+          {/* Player 2 Character Selector (Visible unless Solo / No Tails mode is active) */}
+          {multiplayerMode !== 'single' ? (
+            <div>
+              <label className="block text-[11px] text-slate-400">
+                Player 2 (Arrows + Enter)
+              </label>
+              <div className="mt-0.5 flex items-center gap-1 bg-[#0B0F19] p-1 rounded-lg border border-slate-800">
+                {(['sonic', 'tails', 'knuckles', 'mighty', 'ray'] as CharacterId[]).map((cid) => (
+                  <button
+                    key={cid}
+                    onClick={() => onChangeP2Character(cid)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded capitalize transition-colors cursor-pointer ${
+                      p2Character === cid
+                        ? 'bg-amber-600 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {cid}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="hidden sm:flex flex-col justify-center px-3 py-1 bg-[#0B0F19]/60 border border-slate-800/60 rounded-lg">
+              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Partner (Tails)</span>
+              <span className="text-xs text-slate-400 font-medium">Disabled (Solo Mode)</span>
+            </div>
+          )}
         </div>
 
         {/* Local Multiplayer Mode & Viewport Actions */}
@@ -959,6 +991,7 @@ export const GameStage: React.FC<GameStageProps> = ({
           <div className="flex items-center gap-1 bg-[#0B0F19] p-1 rounded-lg border border-slate-800">
             {(
               [
+                ['single', 'Solo (No Tails)'],
                 ['solo_ai', '1P + AI Partner'],
                 ['coop_shared', '2P Co-op Shared'],
                 ['coop_split', '2P Co-op Split'],
@@ -1164,6 +1197,8 @@ export const GameStage: React.FC<GameStageProps> = ({
                   ? `SLIME-CRUSHER MECH HP: ${hud.bossHp}/${hud.bossMaxHp}`
                   : hud.bossType === 'mystic'
                   ? `EGG DRILL-CRUSHER HP: ${hud.bossHp}/${hud.bossMaxHp}`
+                  : hud.bossType === 'custom'
+                  ? `CUSTOM BOSS HP: ${hud.bossHp}/${hud.bossMaxHp}`
                   : `EGGMAN HP: ${hud.bossHp}/${hud.bossMaxHp}`}
               </span>
             )}
@@ -1199,53 +1234,61 @@ export const GameStage: React.FC<GameStageProps> = ({
             </div>
           </div>
 
-          {/* Live Stage Progress Track for Both Players */}
+          {/* Live Stage Progress Track */}
           <div className="w-full max-w-xs h-1.5 bg-[#0B0F19] rounded-full mt-1.5 relative border border-slate-800 overflow-hidden">
             <div
               className="absolute top-0 bottom-0 left-0 bg-blue-500/60 transition-transform"
               style={{ width: `${hud.p1Progress}%` }}
             />
-            <div
-              className="absolute top-0 bottom-0 left-0 bg-amber-500/60 transition-transform"
-              style={{ width: `${hud.p2Progress}%` }}
-            />
+            {multiplayerMode !== 'single' && (
+              <div
+                className="absolute top-0 bottom-0 left-0 bg-amber-500/60 transition-transform"
+                style={{ width: `${hud.p2Progress}%` }}
+              />
+            )}
           </div>
         </div>
 
-        {/* Player 2 Telemetry */}
-        <div className="flex items-center justify-between md:justify-end gap-5">
-          <div className="text-xs font-mono text-slate-400 hidden sm:block text-right">
-            <div>SPD: {hud.p2Speed.toFixed(1)}</div>
-            <div className="uppercase text-amber-400">{hud.p2State}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-slate-400">
-              P2 ({multiplayerMode === 'solo_ai' ? 'AI / Drop-In' : 'Human'}) ·{' '}
-              {hud.p2IsHyper ? (
-                <strong className="text-sky-300">
-                  {CHARACTER_SPECS[p2Character].hyperName}
-                </strong>
-              ) : hud.p2IsSuper ? (
-                <strong className="text-yellow-300">
-                  {CHARACTER_SPECS[p2Character].superName}
-                </strong>
-              ) : (
-                CHARACTER_SPECS[p2Character].fullName
-              )}
+        {/* Player 2 Telemetry (or Solo mode indicator) */}
+        {multiplayerMode !== 'single' ? (
+          <div className="flex items-center justify-between md:justify-end gap-5">
+            <div className="text-xs font-mono text-slate-400 hidden sm:block text-right">
+              <div>SPD: {hud.p2Speed.toFixed(1)}</div>
+              <div className="uppercase text-amber-400">{hud.p2State}</div>
             </div>
-            <div className="flex items-center justify-end gap-3 mt-0.5 font-mono text-sm">
-              <span
-                className={
-                  hud.p2Rings === 0 ? 'text-amber-400 font-bold' : 'text-yellow-300 font-bold'
-                }
-              >
-                RINGS: {hud.p2Rings}
-              </span>
-              <span className="text-slate-600">·</span>
-              <span className="text-slate-200">SCORE: {hud.p2Score}</span>
+            <div className="text-right">
+              <div className="text-xs text-slate-400">
+                P2 ({multiplayerMode === 'solo_ai' ? 'AI / Drop-In' : 'Human'}) ·{' '}
+                {hud.p2IsHyper ? (
+                  <strong className="text-sky-300">
+                    {CHARACTER_SPECS[p2Character].hyperName}
+                  </strong>
+                ) : hud.p2IsSuper ? (
+                  <strong className="text-yellow-300">
+                    {CHARACTER_SPECS[p2Character].superName}
+                  </strong>
+                ) : (
+                  CHARACTER_SPECS[p2Character].fullName
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-3 mt-0.5 font-mono text-sm">
+                <span
+                  className={
+                    hud.p2Rings === 0 ? 'text-amber-400 font-bold' : 'text-yellow-300 font-bold'
+                  }
+                >
+                  RINGS: {hud.p2Rings}
+                </span>
+                <span className="text-slate-600">·</span>
+                <span className="text-slate-200">SCORE: {hud.p2Score}</span>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-end text-xs text-slate-500 font-mono">
+            <span>SOLO PLAY · NO PARTNER</span>
+          </div>
+        )}
       </div>
 
       {/* Main 60 FPS Game Canvas WITH IN-SCREEN LEFT JOYSTICK & RIGHT JUMP BUTTON */}
@@ -1341,10 +1384,16 @@ export const GameStage: React.FC<GameStageProps> = ({
                 <button
                   onClick={() => {
                     const idx = normalLevels.findIndex((l) => l.id === activeLevel.id);
-                    const nextLvl =
-                      idx !== -1
-                        ? normalLevels[(idx + 1) % normalLevels.length]
-                        : normalLevels[0];
+                    let nextLvl: LevelData;
+                    if (idx !== -1) {
+                      nextLvl = normalLevels[(idx + 1) % normalLevels.length];
+                    } else if (activeLevel.id === 'mystic-caverns-act-2') {
+                      nextLvl =
+                        normalLevels.find((l) => l.id === 'chemical-plant-act-1') ||
+                        normalLevels[0];
+                    } else {
+                      nextLvl = normalLevels[0];
+                    }
                     onClearCheckpointSession(nextLvl.id);
                     onSelectLevel(nextLvl.id);
                   }}

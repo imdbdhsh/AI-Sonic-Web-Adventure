@@ -1,4 +1,5 @@
 import { CHARACTER_SPECS } from '../data/presets';
+import { DEFAULT_CUSTOM_BOSS } from '../data/bossPresets';
 import {
   ActiveBadnik,
   ActiveBoss,
@@ -13,6 +14,8 @@ import {
   TileType,
 } from '../types/engine';
 import {
+  buildTubeRoutePoints,
+  findTubeExit,
   getDynamicPlatformState,
   isBackgroundTile,
   TILE_SIZE,
@@ -165,6 +168,87 @@ function getUploadedSheetImage(dataUrl?: string): HTMLImageElement | null {
   return img.complete && img.naturalWidth > 0 ? img : null;
 }
 
+function drawChemicalTravelTubes(
+  ctx: CanvasRenderingContext2D,
+  workingGrid: number[][],
+  level: LevelData,
+  globalTick: number
+) {
+  const rendered = new Set<string>();
+  const dummyCtx: any = { grid: workingGrid, level };
+  for (let r = 0; r < workingGrid.length; r++) {
+    const row = workingGrid[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      if (row[c] === TileType.GIMMICK_TUBE_ENTRY) {
+        const exit = findTubeExit(dummyCtx, c, r);
+        if (exit) {
+          const key = `${c},${r}->${exit.tx},${exit.ty}`;
+          if (rendered.has(key)) continue;
+          rendered.add(key);
+
+          const route = buildTubeRoutePoints(c, r, exit.tx, exit.ty);
+          if (route.length < 2) continue;
+
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          // 1. Dark outer drop shadow
+          ctx.strokeStyle = 'rgba(15, 23, 42, 0.45)';
+          ctx.lineWidth = 36;
+          ctx.beginPath();
+          ctx.moveTo(route[0].x, route[0].y);
+          for (let p = 1; p < route.length; p++) ctx.lineTo(route[p].x, route[p].y);
+          ctx.stroke();
+
+          // 2. Translucent glass tube casing (cyan tint)
+          ctx.strokeStyle = 'rgba(224, 242, 254, 0.38)';
+          ctx.lineWidth = 30;
+          ctx.stroke();
+
+          // 3. Glowing core fluid with animated light pulses
+          const pulseLight = 0.55 + Math.sin(globalTick * 0.14) * 0.15;
+          ctx.strokeStyle = `rgba(14, 165, 233, ${pulseLight})`;
+          ctx.lineWidth = 18;
+          ctx.stroke();
+
+          // 4. Inner brighter chemical stream
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+          ctx.lineWidth = 10;
+          ctx.stroke();
+
+          // 5. Specular highlight line along the glass
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // 6. Chrome pipe collar brackets with rivets at intervals along the route
+          ctx.fillStyle = '#94A3B8';
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 2;
+          for (let p = 0; p < route.length; p += 3) {
+            const pt = route[p];
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Rivet dots
+            ctx.fillStyle = '#F8FAFC';
+            ctx.beginPath();
+            ctx.arc(pt.x - 5, pt.y - 5, 2, 0, Math.PI * 2);
+            ctx.arc(pt.x + 5, pt.y + 5, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#94A3B8';
+          }
+
+          ctx.restore();
+        }
+      }
+    }
+  }
+}
+
 export function renderViewport(
   ctx: CanvasRenderingContext2D,
   viewWidth: number,
@@ -186,65 +270,179 @@ export function renderViewport(
   isEditor: boolean = false
 ) {
   ctx.save();
+  ctx.clearRect(0, 0, viewWidth, viewHeight);
 
   // 1. Parallax Sky & Horizon
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, viewHeight);
-  skyGrad.addColorStop(0, tileset.palette.skyTop);
-  skyGrad.addColorStop(0.75, tileset.palette.skyBottom);
-  skyGrad.addColorStop(1, tileset.palette.waterColor);
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, viewWidth, viewHeight);
-
-  if (tileset.decorStyle === 'deathegg') {
-    // Sonic 2 Death Egg Zone Orbital Battle Station Background!
-    // 1. Deep Space Starfield & Planet Earth Horizon through Panoramic Viewport Window
-    ctx.fillStyle = '#02040A';
+  if (level.customBackground) {
+    const bg = level.customBackground;
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, viewHeight);
+    skyGrad.addColorStop(0, bg.skyTop);
+    skyGrad.addColorStop(0.55, bg.skyMiddle);
+    skyGrad.addColorStop(1, bg.skyBottom);
+    ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, viewWidth, viewHeight);
 
-    const starParallax = -((camCenterX * 0.05) % 320);
-    for (let sx = starParallax - 320; sx < viewWidth + 320; sx += 160) {
-      ctx.fillStyle = '#E2E8F0';
-      ctx.fillRect(sx + 18, viewHeight * 0.16, 2, 2);
-      ctx.fillRect(sx + 74, viewHeight * 0.28, 3, 3);
-      ctx.fillRect(sx + 126, viewHeight * 0.19, 2, 2);
-      ctx.fillStyle = '#38BDF8';
-      ctx.fillRect(sx + 48, viewHeight * 0.36, 2, 2);
-      ctx.fillRect(sx + 142, viewHeight * 0.32, 2, 2);
+    // Stars / Cosmic Dust
+    if (bg.starsActive) {
+      ctx.fillStyle = '#FFFFFF';
+      for (let i = 0; i < 45; i++) {
+        const sx = (i * 73 - camCenterX * (bg.parallaxSpeedFar || 0.05)) % viewWidth;
+        const normSx = ((sx % viewWidth) + viewWidth) % viewWidth;
+        const sy = (i * 37) % (viewHeight * 0.65);
+        ctx.globalAlpha = 0.4 + 0.6 * Math.sin(globalTick * 0.05 + i);
+        ctx.fillRect(normSx, sy, i % 3 === 0 ? 2 : 1.2, i % 3 === 0 ? 2 : 1.2);
+      }
+      ctx.globalAlpha = 1.0;
     }
 
-    // Glowing Blue Curvature of Planet Earth in Lower Viewport Window
-    const earthGrad = ctx.createLinearGradient(0, viewHeight * 0.42, 0, viewHeight * 0.72);
-    earthGrad.addColorStop(0, 'rgba(56, 189, 248, 0.0)');
-    earthGrad.addColorStop(0.45, 'rgba(14, 165, 233, 0.32)');
-    earthGrad.addColorStop(1, 'rgba(37, 99, 235, 0.58)');
-    ctx.fillStyle = earthGrad;
-    ctx.beginPath();
-    ctx.ellipse(viewWidth * 0.5, viewHeight * 0.92, viewWidth * 0.85, viewHeight * 0.48, 0, Math.PI, 0);
-    ctx.fill();
+    // Grid Floor
+    if (bg.gridFloor) {
+      const horizonY = viewHeight * 0.58;
+      ctx.save();
+      const gridGrad = ctx.createLinearGradient(0, horizonY, 0, viewHeight);
+      gridGrad.addColorStop(0, '#1E0533');
+      gridGrad.addColorStop(1, '#3B0764');
+      ctx.fillStyle = gridGrad;
+      ctx.fillRect(0, horizonY, viewWidth, viewHeight - horizonY);
+      ctx.strokeStyle = '#EC4899';
+      ctx.lineWidth = 1;
+      for (let y = 1; y <= 8; y++) {
+        const py = horizonY + Math.pow(y / 8, 1.8) * (viewHeight - horizonY);
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(viewWidth, py);
+        ctx.stroke();
+      }
+      const cx = viewWidth * 0.5;
+      const gridOffset = ((camCenterX * 0.3) % 40 + 40) % 40;
+      for (let x = -viewWidth; x <= viewWidth * 2; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(cx, horizonY);
+        ctx.lineTo(x - gridOffset, viewHeight);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
-    // 2. Metallic Orbital Bulkhead Frames & Red/Yellow Hazard Conduits
-    const bulkheadOffset = -((camCenterX * 0.22) % 240);
-    for (let bx = bulkheadOffset - 240; bx < viewWidth + 240; bx += 240) {
-      // Heavy Steel Vertical Support Struts framing the Space Window
-      ctx.fillStyle = '#1E293B';
-      ctx.fillRect(bx, 0, 38, viewHeight);
-      ctx.strokeStyle = '#475569';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(bx, 0, 38, viewHeight);
-
-      // Upper & Lower Bulkhead Girders
+    // Distant City / Mountains
+    if (bg.distantCity) {
+      ctx.save();
+      const farOffset = -((camCenterX * (bg.parallaxSpeedFar || 0.12)) % 240);
       ctx.fillStyle = '#0F172A';
-      ctx.fillRect(bx, 0, 240, viewHeight * 0.14);
-      ctx.fillRect(bx, viewHeight * 0.68, 240, viewHeight * 0.32);
-
-      // Blinking Death Egg Telemetry Lights
-      ctx.fillStyle = globalTick % 24 < 12 ? '#EF4444' : '#22C55E';
-      ctx.fillRect(bx + 12, viewHeight * 0.25, 14, 6);
-      ctx.fillStyle = globalTick % 24 < 12 ? '#FACC15' : '#38BDF8';
-      ctx.fillRect(bx + 12, viewHeight * 0.35, 14, 6);
-      ctx.fillRect(bx + 12, viewHeight * 0.45, 14, 6);
+      for (let bx = farOffset - 240; bx < viewWidth + 240; bx += 240) {
+        ctx.fillRect(bx + 10, viewHeight * 0.35, 40, viewHeight * 0.65);
+        ctx.fillRect(bx + 60, viewHeight * 0.45, 55, viewHeight * 0.55);
+        ctx.fillRect(bx + 125, viewHeight * 0.3, 35, viewHeight * 0.7);
+        ctx.fillRect(bx + 170, viewHeight * 0.5, 60, viewHeight * 0.5);
+        ctx.fillStyle = '#FACC15';
+        for (let wy = viewHeight * 0.4; wy < viewHeight * 0.65; wy += 14) {
+          ctx.fillRect(bx + 20, wy, 4, 4);
+          ctx.fillRect(bx + 30, wy, 4, 4);
+          ctx.fillRect(bx + 75, wy, 4, 4);
+        }
+        ctx.fillStyle = '#0F172A';
+      }
+      ctx.restore();
     }
-  } else if (tileset.decorStyle === 'chemical') {
+
+    // Cloud Layers
+    if (bg.cloudLayers) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      const cloudOffset = -((camCenterX * 0.15) % 280);
+      for (let cx = cloudOffset - 280; cx < viewWidth + 280; cx += 280) {
+        ctx.beginPath();
+        ctx.arc(cx + 40, viewHeight * 0.25, 24, 0, Math.PI * 2);
+        ctx.arc(cx + 70, viewHeight * 0.22, 34, 0, Math.PI * 2);
+        ctx.arc(cx + 105, viewHeight * 0.26, 26, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Floating Embers
+    if (bg.floatingEmbers) {
+      ctx.fillStyle = '#F97316';
+      for (let e = 0; e < 18; e++) {
+        const ex = (((e * 89 - camCenterX * 0.2) % viewWidth) + viewWidth) % viewWidth;
+        const ey = viewHeight - ((e * 41 + globalTick * 0.8) % (viewHeight * 0.6));
+        ctx.globalAlpha = 0.5 + 0.5 * Math.sin(globalTick * 0.1 + e);
+        ctx.beginPath();
+        ctx.arc(ex, ey, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1.0;
+    }
+
+    // Water Reflection
+    if (bg.waterReflect) {
+      const waterY = viewHeight * 0.72;
+      ctx.save();
+      const waterGrad = ctx.createLinearGradient(0, waterY, 0, viewHeight);
+      waterGrad.addColorStop(0, 'rgba(6, 182, 212, 0.35)');
+      waterGrad.addColorStop(1, 'rgba(15, 23, 42, 0.85)');
+      ctx.fillStyle = waterGrad;
+      ctx.fillRect(0, waterY, viewWidth, viewHeight - waterY);
+      ctx.restore();
+    }
+  } else {
+    // Standard Zone Sky Gradient (Always covers full viewport)
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, viewHeight);
+    skyGrad.addColorStop(0, tileset.palette.skyTop);
+    skyGrad.addColorStop(1, tileset.palette.skyBottom);
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, viewWidth, viewHeight);
+
+    if (tileset.decorStyle === 'deathegg') {
+      // Sonic 2 Death Egg Zone Orbital Battle Station Background!
+      // 1. Deep Space Starfield & Planet Earth Horizon through Panoramic Viewport Window
+      ctx.fillStyle = '#02040A';
+      ctx.fillRect(0, 0, viewWidth, viewHeight);
+
+      const starParallax = -((camCenterX * 0.05) % 320);
+      for (let sx = starParallax - 320; sx < viewWidth + 320; sx += 160) {
+        ctx.fillStyle = '#E2E8F0';
+        ctx.fillRect(sx + 18, viewHeight * 0.16, 2, 2);
+        ctx.fillRect(sx + 74, viewHeight * 0.28, 3, 3);
+        ctx.fillRect(sx + 126, viewHeight * 0.19, 2, 2);
+        ctx.fillStyle = '#38BDF8';
+        ctx.fillRect(sx + 48, viewHeight * 0.36, 2, 2);
+        ctx.fillRect(sx + 142, viewHeight * 0.32, 2, 2);
+      }
+
+      // Glowing Blue Curvature of Planet Earth in Lower Viewport Window
+      const earthGrad = ctx.createLinearGradient(0, viewHeight * 0.42, 0, viewHeight * 0.72);
+      earthGrad.addColorStop(0, 'rgba(56, 189, 248, 0.0)');
+      earthGrad.addColorStop(0.45, 'rgba(14, 165, 233, 0.32)');
+      earthGrad.addColorStop(1, 'rgba(37, 99, 235, 0.58)');
+      ctx.fillStyle = earthGrad;
+      ctx.beginPath();
+      ctx.ellipse(viewWidth * 0.5, viewHeight * 0.92, viewWidth * 0.85, viewHeight * 0.48, 0, Math.PI, 0);
+      ctx.fill();
+
+      // 2. Metallic Orbital Bulkhead Frames & Red/Yellow Hazard Conduits
+      const bulkheadOffset = -((camCenterX * 0.22) % 240);
+      for (let bx = bulkheadOffset - 240; bx < viewWidth + 240; bx += 240) {
+        // Heavy Steel Vertical Support Struts framing the Space Window
+        ctx.fillStyle = '#1E293B';
+        ctx.fillRect(bx, 0, 38, viewHeight);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, 0, 38, viewHeight);
+
+        // Upper & Lower Bulkhead Girders
+        ctx.fillStyle = '#0F172A';
+        ctx.fillRect(bx, 0, 240, viewHeight * 0.14);
+        ctx.fillRect(bx, viewHeight * 0.68, 240, viewHeight * 0.32);
+
+        // Blinking Death Egg Telemetry Lights
+        ctx.fillStyle = globalTick % 24 < 12 ? '#EF4444' : '#22C55E';
+        ctx.fillRect(bx + 12, viewHeight * 0.25, 14, 6);
+        ctx.fillStyle = globalTick % 24 < 12 ? '#FACC15' : '#38BDF8';
+        ctx.fillRect(bx + 12, viewHeight * 0.35, 14, 6);
+        ctx.fillRect(bx + 12, viewHeight * 0.45, 14, 6);
+      }
+    } else if (tileset.decorStyle === 'chemical') {
     const farOffset = -((camCenterX * 0.12) % 320);
     for (let mx = farOffset - 320; mx < viewWidth + 320; mx += 320) {
       ctx.fillStyle = '#0F172A';
@@ -367,6 +565,7 @@ export function renderViewport(
       ctx.fill();
     }
   }
+}
 
   const camLeft = Math.floor(camCenterX - viewWidth / 2);
   const camTop = Math.floor(camCenterY - viewHeight / 2);
@@ -458,6 +657,9 @@ export function renderViewport(
       );
     }
   }
+
+  // Render Chemical Plant Travel Tubes (permanent glass pipeline network in the stage)
+  drawChemicalTravelTubes(ctx, workingGrid, level, globalTick);
 
   // 3. Render Foreground Level Tiles, Moving/Swinging Platforms & Redone 360° Loops
   for (let r = startRow; r <= endRow; r++) {
@@ -647,7 +849,7 @@ export function renderViewport(
       ctx.globalAlpha = Math.min(1, lifeRatio + 0.2) * 0.65;
       ctx.fillStyle = '#E0F2FE';
       ctx.beginPath();
-      ctx.arc(hz.x, hz.y, hz.radius * (1.2 - lifeRatio * 0.4), 0, Math.PI * 2);
+      ctx.arc(hz.x, hz.y, Math.max(0.1, hz.radius * (1.2 - lifeRatio * 0.4)), 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
@@ -672,21 +874,30 @@ export function renderViewport(
         ctx.save();
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        // Outer glass tube shell
-        ctx.strokeStyle = 'rgba(219, 234, 254, 0.45)';
-        ctx.lineWidth = 42;
-        ctx.beginPath();
-        ctx.moveTo(route[0].x, route[0].y);
-        for (let p = 1; p < route.length; p++) ctx.lineTo(route[p].x, route[p].y);
-        ctx.stroke();
-        // Blue chemicals rushing through the pipe
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+        // Brilliant supercharged neon blue energy pulse along the active segment
+        const activeSeg = Math.min(route.length - 1, pl.tubeTravel.segment);
+        const segStart = Math.max(0, activeSeg - 2);
+        const segEnd = Math.min(route.length - 1, activeSeg + 3);
+        ctx.strokeStyle = 'rgba(125, 211, 252, 0.9)';
         ctx.lineWidth = 26;
+        ctx.beginPath();
+        ctx.moveTo(route[segStart].x, route[segStart].y);
+        for (let p = segStart + 1; p <= segEnd; p++) ctx.lineTo(route[p].x, route[p].y);
         ctx.stroke();
-        // Specular highlight
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.lineWidth = 4;
+
+        // High-energy radiant core around player
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 10;
         ctx.stroke();
+
+        ctx.fillStyle = '#38BDF8';
+        ctx.beginPath();
+        ctx.arc(pl.x, pl.y, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(pl.x, pl.y, 8, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
     }
@@ -711,7 +922,7 @@ export function renderViewport(
     } else {
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, Math.max(0.1, p.size * alpha), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -2060,6 +2271,37 @@ function drawTile(
       break;
     }
 
+    case TileType.BOSS_CUSTOM: {
+      if (showSpawnMarkers) {
+        drawCustomDesignedBoss(
+          ctx,
+          {
+            id: 'preview_custom_boss',
+            bossType: 'custom',
+            customConfig: DEFAULT_CUSTOM_BOSS,
+            x: wx + 16,
+            y: wy + 16,
+            startX: wx + 16,
+            startY: wy + 16,
+            arenaLeft: wx - 264,
+            arenaRight: wx + 296,
+            engaged: false,
+            vx: 0,
+            vy: 0,
+            facing: -1,
+            hp: 12,
+            maxHp: 12,
+            invulnTimer: 0,
+            ballSwingAngle: 0.4,
+            attackTimer: tick,
+            alive: true,
+          },
+          tick
+        );
+      }
+      break;
+    }
+
     default:
       break;
   }
@@ -2083,6 +2325,331 @@ function drawRing(ctx: CanvasRenderingContext2D, x: number, y: number, tick: num
   ctx.restore();
 }
 
+function drawBumperAttached(
+  ctx: CanvasRenderingContext2D,
+  bx: number,
+  by: number,
+  glow: string,
+  pulse: number
+) {
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.scale(pulse, pulse);
+
+  ctx.fillStyle = '#DC2626';
+  ctx.beginPath();
+  ctx.arc(0, 0, 9, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = glow || '#FACC15';
+  ctx.beginPath();
+  ctx.arc(0, 0, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawSpikesAttached(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  dir: 'up' | 'down' | 'left' | 'right'
+) {
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.fillStyle = '#CBD5E1';
+  ctx.strokeStyle = '#0F172A';
+  ctx.lineWidth = 1;
+
+  const len = 11;
+  const half = 4;
+
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    if (dir === 'up') {
+      ctx.moveTo(i * 9 - half, 0);
+      ctx.lineTo(i * 9, -len);
+      ctx.lineTo(i * 9 + half, 0);
+    } else if (dir === 'down') {
+      ctx.moveTo(i * 9 - half, 0);
+      ctx.lineTo(i * 9, len);
+      ctx.lineTo(i * 9 + half, 0);
+    } else if (dir === 'left') {
+      ctx.moveTo(0, i * 9 - half);
+      ctx.lineTo(-len, i * 9);
+      ctx.lineTo(0, i * 9 + half);
+    } else {
+      ctx.moveTo(0, i * 9 - half);
+      ctx.lineTo(len, i * 9);
+      ctx.lineTo(0, i * 9 + half);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawCustomDesignedBoss(
+  ctx: CanvasRenderingContext2D,
+  boss: ActiveBoss,
+  tick: number
+) {
+  const cfg = boss.customConfig!;
+  const scale = cfg.scale || 1.0;
+
+  // 1. Floating Boss Arena Health Bar & Name HUD
+  if (boss.engaged && boss.alive) {
+    ctx.save();
+    const hudW = 140;
+    const hudH = 18;
+    const hudX = Math.round(boss.x - hudW / 2);
+    const hudY = Math.round(boss.y - 42 * scale - 26);
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(hudX, hudY, hudW, hudH);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(hudX, hudY, hudW, hudH);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.fillText(cfg.name.toUpperCase(), hudX + 6, hudY + 12);
+
+    // Segmented pips
+    const maxPips = Math.min(20, cfg.hp);
+    const currentPips = Math.round((boss.hp / cfg.hp) * maxPips);
+    const pipStartX = hudX + hudW - 6 - maxPips * 4;
+    for (let p = 0; p < maxPips; p++) {
+      ctx.fillStyle = p < currentPips ? '#EF4444' : '#475569';
+      ctx.fillRect(pipStartX + p * 4, hudY + 4, 3, 10);
+    }
+    ctx.restore();
+  }
+
+  // 2. Boss Body
+  ctx.save();
+  ctx.translate(boss.x, boss.y);
+  ctx.scale(boss.facing * scale, scale);
+
+  if (boss.invulnTimer > 0 && boss.invulnTimer % 4 < 2) {
+    ctx.globalAlpha = 0.5;
+  }
+
+  // Draw Texture Silhouette
+  if (cfg.texturePreset === 'silversonic') {
+    // Silver Sonic
+    ctx.fillStyle = cfg.primaryColor || '#CBD5E1';
+    ctx.beginPath();
+    ctx.arc(0, -6, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Visor
+    ctx.fillStyle = cfg.glowColor || '#EF4444';
+    ctx.fillRect(-6, -10, 16, 6);
+
+    // Spines
+    ctx.fillStyle = cfg.secondaryColor || '#64748B';
+    ctx.beginPath();
+    ctx.moveTo(-16, -14);
+    ctx.lineTo(-30, -20);
+    ctx.lineTo(-14, -4);
+    ctx.closePath();
+    ctx.fill();
+  } else if (cfg.texturePreset === 'deathegg') {
+    // Death Egg Robot
+    ctx.fillStyle = cfg.primaryColor || '#EAB308';
+    ctx.fillRect(-28, -26, 56, 44);
+    ctx.strokeStyle = '#0F172A';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-28, -26, 56, 44);
+
+    // Dome
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+    ctx.beginPath();
+    ctx.arc(0, -32, 14, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = '#38BDF8';
+    ctx.stroke();
+
+    // Reactor Core
+    ctx.fillStyle = cfg.glowColor || '#38BDF8';
+    ctx.beginPath();
+    ctx.arc(0, -4, 8, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (cfg.texturePreset === 'egg_drill') {
+    // Egg Drill
+    ctx.fillStyle = cfg.primaryColor || '#7E22CE';
+    ctx.beginPath();
+    ctx.arc(0, -6, 22, 0, Math.PI);
+    ctx.fill();
+
+    // Spinning Drill
+    ctx.fillStyle = cfg.secondaryColor || '#EAB308';
+    ctx.beginPath();
+    ctx.moveTo(18, -12);
+    ctx.lineTo(44, -6);
+    ctx.lineTo(18, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = cfg.glowColor || '#F97316';
+    ctx.fillRect(-18, -14, 36, 6);
+  } else if (cfg.texturePreset === 'egg_chemical') {
+    // Chemical Slime Mech
+    ctx.fillStyle = cfg.primaryColor || '#0284C7';
+    ctx.fillRect(-22, -18, 44, 32);
+    ctx.strokeStyle = '#0F172A';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-22, -18, 44, 32);
+
+    // Bubbling Slime Chamber
+    ctx.fillStyle = cfg.secondaryColor || '#0D9488';
+    ctx.beginPath();
+    ctx.arc(0, -2, 14, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Slime Core Glow
+    ctx.fillStyle = cfg.glowColor || '#A855F7';
+    ctx.beginPath();
+    ctx.arc(0, -2, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Caution Hatch
+    ctx.fillStyle = cfg.trimColor || '#FACC15';
+    ctx.fillRect(-18, 10, 36, 4);
+  } else if (cfg.texturePreset === 'shadow_metal') {
+    // Shadow Metal
+    ctx.fillStyle = cfg.primaryColor || '#0F172A';
+    ctx.beginPath();
+    ctx.arc(0, -6, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = cfg.secondaryColor || '#9333EA';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = cfg.glowColor || '#F43F5E';
+    ctx.fillRect(-6, -10, 16, 6);
+
+    ctx.fillStyle = cfg.secondaryColor || '#9333EA';
+    ctx.beginPath();
+    ctx.moveTo(-16, -14);
+    ctx.lineTo(-30, -20);
+    ctx.lineTo(-14, -4);
+    ctx.closePath();
+    ctx.fill();
+  } else if (cfg.texturePreset === 'golden_mecha') {
+    // Golden Mecha
+    ctx.fillStyle = cfg.primaryColor || '#FACC15';
+    ctx.beginPath();
+    ctx.arc(0, 0, 24, 0, Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = cfg.secondaryColor || '#F59E0B';
+    ctx.fillRect(-24, -4, 48, 8);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, -8, 16, Math.PI, 0);
+    ctx.fill();
+  } else {
+    // Eggmobile Classic / Custom
+    ctx.fillStyle = cfg.primaryColor || '#DC2626';
+    ctx.beginPath();
+    ctx.arc(0, 0, 24, 0, Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = cfg.secondaryColor || '#FACC15';
+    ctx.fillRect(-24, -4, 48, 8);
+
+    ctx.fillStyle = cfg.trimColor || '#F8FAFC';
+    for (let x = -20; x <= 16; x += 8) {
+      ctx.fillRect(x, -3, 4, 6);
+    }
+
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.5)';
+    ctx.beginPath();
+    ctx.arc(0, -8, 16, Math.PI, 0);
+    ctx.fill();
+  }
+
+  // Custom Pixel Matrix Insignia Badge
+  if (cfg.customPixels && cfg.customPixels.length === 16) {
+    const pxSize = 1.1;
+    const startPxX = -8 * pxSize;
+    const startPxY = -2 * pxSize;
+    for (let r = 0; r < 16; r++) {
+      for (let c = 0; c < 16; c++) {
+        const col = cfg.customPixels[r][c];
+        if (col && col !== '#00000000') {
+          ctx.fillStyle = col;
+          ctx.fillRect(startPxX + c * pxSize, startPxY + r * pxSize, pxSize, pxSize);
+        }
+      }
+    }
+  }
+
+  // Draw Attached Bumpers
+  const attach = cfg.attachments;
+  const bumperPulse = 0.9 + 0.15 * Math.sin(tick * 0.2);
+  if (attach.bumpersLeft) {
+    drawBumperAttached(ctx, -30, -2, cfg.glowColor, bumperPulse);
+  }
+  if (attach.bumpersRight) {
+    drawBumperAttached(ctx, 30, -2, cfg.glowColor, bumperPulse);
+  }
+  if (attach.bumpersTop) {
+    drawBumperAttached(ctx, 0, -28, cfg.glowColor, bumperPulse);
+  }
+  if (attach.bumpersBottom) {
+    drawBumperAttached(ctx, 0, 24, cfg.glowColor, bumperPulse);
+  }
+
+  // Draw Attached Spikes
+  if (attach.spikesFront) {
+    drawSpikesAttached(ctx, 24, -2, 'right');
+  }
+  if (attach.spikesTop) {
+    drawSpikesAttached(ctx, 0, -26, 'up');
+  }
+  if (attach.spikesBottom) {
+    drawSpikesAttached(ctx, 0, 22, 'down');
+  }
+  if (attach.spikesRear) {
+    drawSpikesAttached(ctx, -24, -2, 'left');
+  }
+
+  // Wrecking Ball (if weapon)
+  if (cfg.attackType === 'wrecking_ball') {
+    const ballX = Math.sin(boss.ballSwingAngle) * 58;
+    const ballY = Math.cos(boss.ballSwingAngle) * 58;
+    ctx.strokeStyle = '#94A3B8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 10);
+    ctx.lineTo(ballX, ballY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#475569';
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#FACC15';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 function drawEggmanBoss(
   ctx: CanvasRenderingContext2D,
   boss: ActiveBoss,
@@ -2090,6 +2657,12 @@ function drawEggmanBoss(
   customTextures?: Record<string, HTMLCanvasElement>
 ) {
   ctx.save();
+
+  if (boss.customConfig) {
+    drawCustomDesignedBoss(ctx, boss, tick);
+    ctx.restore();
+    return;
+  }
 
   // ==========================================================================
   // NEW MECHA BOSS 1: HYDRAULIC SLIME-CRUSHER & SIPHON MECH (Chemical Plant)
@@ -2218,7 +2791,7 @@ function drawEggmanBoss(
       for (let s = 0; s < 4; s++) {
         const sy = -36 - ((tick * 2.2 + s * 14) % 46);
         ctx.beginPath();
-        ctx.arc((s % 2 === 0 ? -1 : 1) * (8 + s * 3), sy, 8 - s, 0, Math.PI * 2);
+        ctx.arc((s % 2 === 0 ? -1 : 1) * (8 + s * 3), sy, Math.max(0.5, 8 - s), 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -2300,7 +2873,7 @@ function drawEggmanBoss(
         const bx = -28 + d * 11;
         const by = -30 - ((tick * 2.4 + d * 8) % 28);
         ctx.beginPath();
-        ctx.arc(bx, by, 3 + (d % 3), 0, Math.PI * 2);
+        ctx.arc(bx, by, Math.max(0.5, 3 + (d % 3)), 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -2313,10 +2886,10 @@ function drawEggmanBoss(
       ctx.fillRect(-38, exY - 4, 3, 8);
       // Animated exhaust smoke and backfire sparks
       if (charging || phase === 'drill_rev') {
-        const puff = (tick * 2.8 + exY * 7) % 24;
+        const puff = ((tick * 2.8 + (exY + 10) * 7) % 24 + 24) % 24;
         ctx.fillStyle = tick % 4 < 2 ? '#22D3EE' : '#C084FC';
         ctx.beginPath();
-        ctx.arc(-42 - puff, exY + (Math.sin(tick * 0.4) * 3), 3 + puff * 0.25, 0, Math.PI * 2);
+        ctx.arc(-42 - puff, exY + Math.sin(tick * 0.4) * 3, Math.max(0.5, 3 + puff * 0.25), 0, Math.PI * 2);
         ctx.fill();
       }
     }

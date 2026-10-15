@@ -144,6 +144,11 @@ export const MultiplayerGuide: React.FC<MultiplayerGuideProps> = ({
             {(
               [
                 [
+                  'single',
+                  'Single Player (Solo / No Tails)',
+                  'Play purely as a single character with no AI companion or partner following you. Enjoy clean classic solo platforming.',
+                ],
+                [
                   'solo_ai',
                   '1P + AI Partner (Drop-In Co-op)',
                   'Player 2 is controlled by AI companion logic, but a second human player can press Arrow Keys + Enter at any moment to take over.',

@@ -11,6 +11,7 @@ import {
   Grid,
   Hand,
   Layers,
+  Palette,
   Play,
   Plus,
   Smartphone,
@@ -18,12 +19,15 @@ import {
   Square,
   Trash2,
   Upload,
+  Zap,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
 import { TILE_SIZE } from '../engine/physicsEngine';
 import { renderViewport } from '../engine/renderer';
 import { LevelData, TilesetConfig, TileType } from '../types/engine';
+import { BackgroundEditor } from './BackgroundEditor';
+import { BossEditor } from './BossEditor';
 
 interface LevelEditorProps {
   levels: LevelData[];
@@ -172,6 +176,7 @@ const PALETTE_ITEMS: TilePaletteItem[] = [
   { type: TileType.BOSS_MYSTIC, label: 'Boss: Mystic Egg Drill-Crusher (Act 2)', category: 'badniks', swatch: '#A855F7' },
   { type: TileType.BOSS_SILVER_SONIC, label: 'Death Egg: Silver Sonic Boss', category: 'badniks', swatch: '#CBD5E1' },
   { type: TileType.BOSS_DEATH_EGG_ROBOT, label: 'Death Egg: Final Mecha Boss', category: 'badniks', swatch: '#FACC15' },
+  { type: TileType.BOSS_CUSTOM, label: 'Custom Boss (Custom AI, HP, Bumpers & Spikes)', category: 'badniks', swatch: '#F59E0B' },
 ];
 
 export const LevelEditor: React.FC<LevelEditorProps> = ({
@@ -220,6 +225,8 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
   // Local draft inputs for level width and height so typing does not prematurely crop the level
   const [draftWidth, setDraftWidth] = useState<string>(String(activeLevel.width));
   const [draftHeight, setDraftHeight] = useState<string>(String(activeLevel.height));
+  const [showBossStudioModal, setShowBossStudioModal] = useState<boolean>(false);
+  const [showBgStudioModal, setShowBgStudioModal] = useState<boolean>(false);
 
   useEffect(() => {
     setDraftWidth(String(activeLevel.width));
@@ -278,6 +285,7 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
           const effW = Math.round(canvas.width / s.cameraZoom);
           const effH = Math.round(canvas.height / s.cameraZoom);
 
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.save();
           ctx.scale(s.cameraZoom, s.cameraZoom);
           renderViewport(
@@ -820,8 +828,10 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
                 {levels.map((lvl) => (
                   <option key={lvl.id} value={lvl.id}>
                     {lvl.id === 'broken-test-01'
-                      ? 'Emerald Heights — Act 3 (Bonus Tower)'
-                      : `${lvl.name} — Act ${lvl.act}`}
+                      ? 'Broken Test 01'
+                      : lvl.id === 'mystic-caverns-act-2' && !lvl.name.includes('(Broken)')
+                        ? `${lvl.name} (Broken) — Act ${lvl.act}`
+                        : `${lvl.name} — Act ${lvl.act}`}
                   </option>
                 ))}
               </select>
@@ -1345,6 +1355,24 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
             </button>
 
             <button
+              onClick={() => setShowBossStudioModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 rounded-lg transition-colors whitespace-nowrap cursor-pointer shadow-sm"
+              title="Open Custom Boss Creator Studio"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              Boss Studio
+            </button>
+
+            <button
+              onClick={() => setShowBgStudioModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 rounded-lg transition-colors whitespace-nowrap cursor-pointer shadow-sm"
+              title="Open Zone Background Studio"
+            >
+              <Palette className="w-3.5 h-3.5 text-indigo-400" />
+              Background Studio
+            </button>
+
+            <button
               onClick={() => setShowGrid((g) => !g)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
                 showGrid
@@ -1599,6 +1627,33 @@ export const LevelEditor: React.FC<LevelEditorProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Boss Studio Modal Overlay */}
+      {showBossStudioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <BossEditor
+              level={activeLevel}
+              onUpdateLevel={onUpdateLevel}
+              onClose={() => setShowBossStudioModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Background Studio Modal Overlay */}
+      {showBgStudioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <BackgroundEditor
+              level={activeLevel}
+              activeTileset={activeTileset}
+              onUpdateLevel={onUpdateLevel}
+              onClose={() => setShowBgStudioModal(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

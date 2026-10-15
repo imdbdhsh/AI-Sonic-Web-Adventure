@@ -1,6 +1,6 @@
 export type CharacterId = 'sonic' | 'tails' | 'knuckles' | 'mighty' | 'ray';
 
-export type MultiplayerMode = 'solo_ai' | 'coop_shared' | 'coop_split' | 'versus_split';
+export type MultiplayerMode = 'single' | 'solo_ai' | 'coop_shared' | 'coop_split' | 'versus_split';
 
 export type SplitOrientation = 'horizontal' | 'vertical';
 
@@ -132,6 +132,7 @@ export enum TileType {
   GIMMICK_TUBE_EXIT = 90,    // Chemical Plant: Travel Tube Exit (Launches players out)
   BOSS_CHEMICAL = 91,        // Chemical Plant Act 2 Boss: Hydraulic Slime-Crusher & Siphon Mech
   BOSS_MYSTIC = 92,          // Mystic Caverns Act 2 Boss: Egg Drill-Crusher
+  BOSS_CUSTOM = 93,          // Custom Designed Boss (Custom HP, AI, Textures, Bumpers, Spikes & Arena)
 }
 
 export enum SpecialTileType {
@@ -294,6 +295,114 @@ export interface TilesetConfig {
   };
 }
 
+export type BossMovementAI =
+  | 'eggman_hover'       // Classic hovering Eggmobile with swing / drop
+  | 'silversonic_dash'   // Roller-skate dash, spike leap, razor roll
+  | 'deathegg_mech'      // Giant Death Egg walking mech with rocket claws and targeting
+  | 'drill_charge'       // Mystic drill rev, burrow & wall charge
+  | 'chemical_piston'    // Hydraulic piston stomp, flood & vortex
+  | 'magma_dropper'      // Lava swooper dropping fire bombs
+  | 'sine_patrol'        // Undulating sine-wave dive bomber
+  | 'bounce_frenzy';     // Erratic pinball bumper bouncing mech
+
+export type BossTexturePreset =
+  | 'custom'             // Custom colors and custom pixel matrix
+  | 'silversonic'        // Silver Sonic Mecha Mk. I
+  | 'deathegg'           // Giant Death Egg Robot
+  | 'eggman_classic'     // Classic Red Eggmobile
+  | 'egg_drill'          // Heavy Drill Mech
+  | 'egg_chemical'       // Hydraulic Chem Pod
+  | 'shadow_metal'       // Dark Obsidian & Neon Cyber Mech
+  | 'golden_mecha';      // Gold Plated Super-Egg Mech
+
+export type BossAttackType =
+  | 'none'
+  | 'wrecking_ball'      // Swinging wrecking ball
+  | 'plasma_fire'        // Forward plasma shots
+  | 'magma_bomb'         // Dropping explosive fire bombs
+  | 'laser_sweep'        // Sweeping cyber laser / homing sparks
+  | 'spikes_radial'      // 6-spike radial burst
+  | 'rocket_claws';      // Rocket propelled projectile arms
+
+export interface BossAttachmentConfig {
+  bumpersLeft: boolean;
+  bumpersRight: boolean;
+  bumpersTop: boolean;
+  bumpersBottom: boolean;
+  spikesFront: boolean;
+  spikesTop: boolean;
+  spikesBottom: boolean;
+  spikesRear: boolean;
+}
+
+export interface BossHitboxConfig {
+  coreRadius: number;           // Radius of weak point / cockpit core in px (e.g. 28)
+  coreOffsetX: number;          // X offset of weak point from center (e.g. 0)
+  coreOffsetY: number;          // Y offset of weak point from center (e.g. 0)
+  contactDamageRadius: number;  // Radius of contact damage body hurtbox in px (e.g. 26)
+  contactOffsetX: number;       // X offset for contact damage (e.g. 0)
+  contactOffsetY: number;       // Y offset for contact damage (e.g. 0)
+}
+
+export interface CustomBossConfig {
+  id: string;            // Unique identifier e.g. "boss_custom_1"
+  name: string;          // e.g. "Silver Sonic", "Death Egg Robot", "Egg Deflector"
+  title: string;         // Subtitle e.g. "Mecha Sonic Mk. I Prototype"
+  hp: number;            // 1 to 50 HP (default 10)
+  maxHp: number;
+  movementAI: BossMovementAI;
+  moveSpeed: number;     // 1 to 10 (default 3.5)
+  arenaRadius: number;   // 150 to 900 (default 340 px)
+  attackType: BossAttackType;
+  attackInterval: number;// 30 to 240 frames (default 80)
+  
+  // Attachments: Bumpers & Spikes
+  attachments: BossAttachmentConfig;
+  bumperBounciness: number; // 6 to 18 (default 12)
+
+  // Custom Hitbox Editor Settings
+  hitbox?: BossHitboxConfig;
+  
+  // Visuals & Textures
+  texturePreset: BossTexturePreset;
+  primaryColor: string;    // Hull / chassis primary
+  secondaryColor: string;  // Accent / stripes
+  glowColor: string;       // Visor / thrusters / bumper core
+  trimColor: string;       // Hazard trim / metal plating
+  scale: number;           // 0.8 to 2.5
+  customPixels?: string[][]; // 16x16 pixel insignia matrix
+  
+  // Rewards & drops
+  defeatReward: 'goal_post' | 'giant_ring' | 'ring_shower_20' | 'chaos_emerald';
+}
+
+export type BackgroundTheme =
+  | 'default'
+  | 'deathegg'
+  | 'cave'
+  | 'chemicalplant'
+  | 'palms'
+  | 'marble'
+  | 'sanctuary'
+  | 'cyber_grid'
+  | 'sunset_mountains'
+  | 'deep_space';
+
+export interface CustomBackgroundConfig {
+  theme: BackgroundTheme;
+  skyTop: string;
+  skyMiddle: string;
+  skyBottom: string;
+  parallaxSpeedFar: number;   // 0.02 to 0.5
+  parallaxSpeedNear: number;  // 0.1 to 0.8
+  cloudLayers: boolean;
+  starsActive: boolean;
+  floatingEmbers: boolean;
+  distantCity: boolean;
+  waterReflect: boolean;
+  gridFloor: boolean;
+}
+
 export interface LevelData {
   id: string;
   name: string;
@@ -306,6 +415,8 @@ export interface LevelData {
   bgGrid?: number[][]; // [row][col] Background layer (renders behind foreground & players!)
   p1Spawn: { x: number; y: number };
   p2Spawn: { x: number; y: number };
+  customBosses?: CustomBossConfig[];
+  customBackground?: CustomBackgroundConfig;
 }
 
 export interface LevelCheckpointSession {
@@ -510,7 +621,8 @@ export interface ActiveBoss {
     | 'chemical'
     | 'mystic'
     | 'silversonic'
-    | 'deathegg';
+    | 'deathegg'
+    | 'custom';
   x: number;
   y: number;
   startX: number;
@@ -548,6 +660,7 @@ export interface ActiveBoss {
   drillSpinning?: boolean;
   ceilingBurrow?: boolean;
   slamLanded?: boolean;      // Ground-slam impact already resolved this phase
+  customConfig?: CustomBossConfig;
 }
 
 export interface BadnikProjectile {
@@ -627,5 +740,7 @@ export interface CustomStagePackage {
   audio: {
     sfxPatches: Record<string, SfxPatch>;
   };
+  customBosses?: CustomBossConfig[];
+  customBackground?: CustomBackgroundConfig;
 }
 

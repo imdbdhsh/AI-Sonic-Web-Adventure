@@ -10,7 +10,8 @@ export type SfxPatchKey =
   | 'pop'
   | 'lavaBurn'
   | 'bossHit'
-  | 'superTransform';
+  | 'superTransform'
+  | 'tubeWhoosh';
 
 export const DEFAULT_SFX_PATCHES: Record<SfxPatchKey, SfxPatch> = {
   jump: {
@@ -151,6 +152,20 @@ export const DEFAULT_SFX_PATCHES: Record<SfxPatchKey, SfxPatch> = {
     fmDepth: 95,
     fmRate: 32,
     noiseMix: 0.12,
+    volume: 0.24,
+  },
+  tubeWhoosh: {
+    name: 'Chemical Travel Tube Whoosh',
+    category: 'world',
+    wave: 'sawtooth',
+    baseFreq: 520,
+    endFreq: 980,
+    durationMs: 280,
+    attackMs: 6,
+    pitchCurve: 'exponential',
+    fmDepth: 160,
+    fmRate: 64,
+    noiseMix: 0.18,
     volume: 0.24,
   },
 };
@@ -389,6 +404,18 @@ class SoundEngine {
 
   public playSuperTransform() {
     this.playPatch('superTransform');
+  }
+
+  public playTubeWhoosh(pitchMultiplier: number = 1.0) {
+    this.playPatch('tubeWhoosh', pitchMultiplier);
+  }
+
+  public playBumper() {
+    this.playPatch('spring', 1.45);
+  }
+
+  public playLaser() {
+    this.playPatch('spindashRelease', 1.6);
   }
 
   private playTone(

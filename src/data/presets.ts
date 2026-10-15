@@ -10,6 +10,7 @@ import {
   TilesetPalette,
   TileType,
 } from '../types/engine';
+import mysticCavernsAct1Pkg from './mysticCavernsAct1Package.json';
 
 export const CHAOS_EMERALD_INFO = [
   { number: 1, name: 'Green Chaos Emerald', color: '#22C55E' },
@@ -1849,8 +1850,8 @@ function buildBrokenTest01(): LevelData {
 
   return {
     id: 'broken-test-01',
-    name: 'Emerald Heights',
-    act: 3,
+    name: 'Broken Test 01',
+    act: 1,
     author: 'Sonic Velocity Studio',
     width,
     height,
@@ -2609,6 +2610,12 @@ function buildChemicalPlantAct1(): LevelData {
     fillRect(grid, px, 22, 5, 1, TileType.PLATFORM, TileType.PLATFORM);
     grid[20][px + 2] = TileType.RING;
   }
+  // High-Speed Pneumatic Vat Bypass Tube (shoots players across the deadly chemical lake!)
+  grid[21][62] = TileType.GIMMICK_TUBE_ENTRY;
+  fillRect(grid, 84, 17, 7, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[16][86] = TileType.GIMMICK_TUBE_EXIT;
+  grid[15][88] = TileType.RING;
+  grid[15][89] = TileType.RING;
   grid[21][46] = TileType.BADNIK_BUZZ;
   grid[18][62] = TileType.GIMMICK_DASH_RING;
   grid[21][80] = TileType.BADNIK_BOMB;
@@ -2709,6 +2716,11 @@ function buildChemicalPlantAct2(): LevelData {
   fillRect(grid, 82, 24, 3, 5, TileType.GROUND_TOP, TileType.GROUND_DEEP);
   grid[24][83] = TileType.GIMMICK_STEAM_VENT;
   grid[22][66] = TileType.GIMMICK_DASH_RING;
+  // Express Lake Tube over the chemical abyss:
+  grid[22][72] = TileType.GIMMICK_TUBE_ENTRY;
+  fillRect(grid, 95, 17, 6, 1, TileType.PLATFORM, TileType.PLATFORM);
+  grid[16][97] = TileType.GIMMICK_TUBE_EXIT;
+  grid[15][99] = TileType.MONITOR_SPEED;
   grid[20][90] = TileType.BADNIK_BUZZ;
 
   // Section 3: Twin-Deck Steel Foundry, Spike Beds & Crate Vault (x 104..178)
@@ -2723,6 +2735,11 @@ function buildChemicalPlantAct2(): LevelData {
   }
   grid[24][130] = TileType.GIMMICK_STEAM_VENT;
   grid[24][148] = TileType.GIMMICK_STEAM_VENT;
+  // Foundry Expressway Tube directly to the arena threshold:
+  grid[23][142] = TileType.GIMMICK_TUBE_ENTRY;
+  fillRect(grid, 170, 16, 6, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
+  grid[15][172] = TileType.GIMMICK_TUBE_EXIT;
+  grid[14][174] = TileType.MONITOR_RING;
   for (let sx = 136; sx <= 144; sx += 4) grid[24][sx] = TileType.SPIKES_UP;
   fillRect(grid, 134, 18, 14, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
   for (let sx = 136; sx <= 144; sx += 4) grid[20][sx] = TileType.SPIKES_DOWN;
@@ -2778,177 +2795,26 @@ function buildChemicalPlantAct2(): LevelData {
 // (Multi-Tiered Purple Caverns: Upper High-Speed Mine Rails, Middle Crystal
 //  Tunnels, Deep Stalactite Abyss, Swinging Platforms & Secret Gem Vaults)
 // ============================================================================
+// LEVEL 11: MYSTIC CAVERNS ZONE — ACT 1
+// (Multi-Tiered Purple Caverns: Upper High-Speed Mine Rails, Middle Crystal
+//  Tunnels, Deep Stalactite Abyss, Swinging Platforms & Secret Gem Vaults)
+// ============================================================================
 function buildMysticCavernsAct1(): LevelData {
-  const width = 250;
-  const height = 34;
-  const grid = createEmptyGrid(width, height);
-
-  // Section 1: Cavern Mouth & First Momentum Chute (x 0..42)
-  // Ceiling rock arch
-  fillRect(grid, 0, 0, 42, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  // Starting floor
-  fillRect(grid, 0, 20, 14, 14, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[19][4] = TileType.SPAWN_P1;
-  grid[19][2] = TileType.SPAWN_P2;
-  for (let x = 6; x <= 12; x++) grid[18][x] = TileType.RING;
-  grid[19][13] = TileType.MONITOR_SHIELD;
-
-  // Downhill momentum slope plunging into the lower cavern tunnel
-  addSlopeRunDown(grid, 14, 20, 5); // x: 14..23, y drops from 20 to 25
-  fillRect(grid, 24, 25, 18, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[24][26] = TileType.BOOSTER_RIGHT;
-  grid[19][32] = TileType.LOOP_HEAD; // Full loop inside the cavern!
-  for (let x = 36; x <= 40; x++) grid[23][x] = TileType.RING;
-
-  // Upper Mine Rail Branch (reachable via loop launch or spring)
-  fillRect(grid, 22, 14, 18, 1, TileType.PLATFORM, TileType.PLATFORM);
-  grid[12][24] = TileType.RING;
-  grid[12][26] = TileType.RING;
-  grid[13][28] = TileType.MONITOR_SPEED;
-  grid[13][38] = TileType.SPRING_RED; // Launches to the upper viaduct!
-
-  // Section 2: Three-Tier Branching Cavern (x 42..98)
-  // Continuous cavern ceiling with hanging stalactites
-  fillRect(grid, 42, 0, 56, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 46; sx <= 92; sx += 8) grid[9][sx] = TileType.GIMMICK_STALACTITE;
-
-  // --- TIER 1: Upper High-Speed Mine Rail (y: 11..14) ---
-  fillRect(grid, 44, 12, 14, 1, TileType.PLATFORM, TileType.PLATFORM);
-  grid[11][48] = TileType.GIMMICK_DASH_RING;
-  grid[11][54] = TileType.SWINGING_PLATFORM;
-  fillRect(grid, 58, 12, 12, 1, TileType.PLATFORM, TileType.PLATFORM);
-  for (let x = 60; x <= 66; x += 2) grid[10][x] = TileType.RING;
-  grid[11][74] = TileType.SWINGING_PLATFORM;
-  fillRect(grid, 78, 13, 14, 1, TileType.PLATFORM, TileType.PLATFORM);
-  grid[12][82] = TileType.MONITOR_INVINCIBILITY;
-  grid[12][88] = TileType.BOOSTER_RIGHT;
-
-  // --- TIER 2: Middle Crystal Tunnel & S-Slopes (y: 19..24) ---
-  fillRect(grid, 42, 23, 12, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[22][45] = TileType.BADNIK_CATERKILLER;
-  addSlopeRunUp(grid, 54, 23, 4); // x: 54..61, y climbs from 23 to 19
-  fillRect(grid, 62, 19, 14, 15, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[18][65] = TileType.CHECKPOINT;
-  for (let x = 67; x <= 72; x++) grid[17][x] = TileType.RING;
-  grid[17][70] = TileType.BADNIK_BATBRAIN;
-  addSlopeRunDown(grid, 76, 19, 4); // x: 76..83, y drops back to 23
-  fillRect(grid, 84, 23, 14, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 87; sx <= 93; sx += 3) grid[22][sx] = TileType.SPIKES_UP;
-
-  // --- TIER 3: Lower Mine Shaft & Secret Gem Vault (y: 27..33) ---
-  fillRect(grid, 42, 30, 24, 4, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 44; sx <= 54; sx += 2) grid[30][sx] = TileType.SPIKES_UP;
-  // Vertical elevator shaft connecting lower and middle tiers
-  grid[26][68] = TileType.MOVING_PLATFORM_VERT;
-  grid[21][68] = TileType.MOVING_PLATFORM_VERT;
-  // Breakable rock wall concealing the secret Giant Ring Vault
-  fillRect(grid, 82, 26, 14, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let ry = 27; ry <= 31; ry++) {
-    for (let rx = 84; rx <= 94; rx++) grid[ry][rx] = TileType.EMPTY;
-    grid[ry][83] = TileType.BREAKABLE_ROCK;
-  }
-  grid[31][86] = TileType.GIANT_RING;
-  grid[31][89] = TileType.MONITOR_1UP;
-  grid[31][91] = TileType.RING;
-  grid[31][92] = TileType.RING;
-
-  // Section 3: The Great Crystal Chasm & Stalactite Gauntlet (x 98..172)
-  fillRect(grid, 98, 0, 74, 9, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 104; sx <= 164; sx += 6) grid[9][sx] = TileType.GIMMICK_STALACTITE;
-
-  // Chasm entrance landing
-  fillRect(grid, 98, 21, 12, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[20][101] = TileType.CHECKPOINT;
-  grid[20][104] = TileType.MONITOR_FLAME;
-  grid[20][107] = TileType.BOOSTER_RIGHT;
-
-  // Floating crystal pillars across the deep void
-  fillRect(grid, 114, 23, 6, 11, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[21][116] = TileType.RING;
-  grid[21][117] = TileType.RING;
-  grid[22][118] = TileType.BADNIK_CATERKILLER;
-
-  // High aerial route across the chasm
-  grid[13][118] = TileType.SWINGING_PLATFORM;
-  fillRect(grid, 124, 14, 10, 1, TileType.PLATFORM, TileType.PLATFORM);
-  grid[12][126] = TileType.GIMMICK_DASH_RING;
-  for (let x = 128; x <= 132; x += 2) grid[12][x] = TileType.RING;
-  grid[13][138] = TileType.SWINGING_PLATFORM;
-
-  // Middle rock islands & ceiling spike hazards
-  fillRect(grid, 128, 22, 8, 12, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 129; sx <= 133; sx += 2) grid[21][sx] = TileType.SPIKES_UP;
-  fillRect(grid, 127, 16, 10, 2, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let sx = 129; sx <= 133; sx += 2) grid[18][sx] = TileType.SPIKES_DOWN; // Ceiling spikes!
-
-  fillRect(grid, 142, 21, 8, 13, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[19][144] = TileType.BADNIK_BATBRAIN;
-  grid[20][147] = TileType.SPRING_RED;
-
-  // Lower chasm floor with floor spikes and rescue vertical elevator
-  fillRect(grid, 110, 31, 46, 3, TileType.GROUND_DEEP, TileType.GROUND_DEEP);
-  for (let sx = 112; sx <= 152; sx += 3) grid[30][sx] = TileType.SPIKES_UP;
-  grid[28][154] = TileType.MOVING_PLATFORM_VERT;
-  grid[23][154] = TileType.MOVING_PLATFORM_VERT;
-
-  // Landing ledge on the far side of the chasm
-  fillRect(grid, 156, 19, 16, 15, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[18][158] = TileType.CHECKPOINT;
-  for (let x = 160; x <= 168; x += 2) grid[17][x] = TileType.RING;
-  grid[18][166] = TileType.MONITOR_LIGHTNING;
-
-  // Section 4: Vertical Shaft Ascent & Runaway Mine Cart Finale (x 172..250)
-  fillRect(grid, 172, 0, 78, 8, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-
-  // Twin elevator ascent shaft carved through solid purple rock
-  fillRect(grid, 172, 8, 20, 26, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  for (let ry = 9; ry <= 25; ry++) {
-    for (let rx = 175; rx <= 186; rx++) grid[ry][rx] = TileType.EMPTY;
-  }
-  grid[23][178] = TileType.MOVING_PLATFORM_VERT;
-  grid[16][182] = TileType.MOVING_PLATFORM_VERT;
-  grid[11][180] = TileType.RING;
-  grid[13][180] = TileType.RING;
-  grid[15][180] = TileType.RING;
-
-  // Upper high-speed rail departure deck (y: 11)
-  fillRect(grid, 187, 12, 14, 22, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[11][189] = TileType.BOOSTER_RIGHT;
-  grid[11][194] = TileType.MONITOR_SPEED;
-
-  // Grand downhill runaway rail plunging into the cavern depths
-  addSlopeRunDown(grid, 201, 12, 5); // x: 201..210, drops from 12 to 17
-  fillRect(grid, 211, 17, 39, 17, TileType.GROUND_TOP, TileType.GROUND_DEEP);
-  grid[16][213] = TileType.BOOSTER_RIGHT;
-  grid[11][219] = TileType.LOOP_HEAD; // Final thrilling loop!
-  for (let x = 224; x <= 232; x += 2) grid[15][x] = TileType.RING;
-  grid[16][228] = TileType.BADNIK_CATERKILLER;
-
-  // Stalactites hanging directly over the finish stretch
-  for (let sx = 226; sx <= 238; sx += 4) grid[8][sx] = TileType.GIMMICK_STALACTITE;
-
-  // Hidden high crystal shelf above the goal with a Giant Ring
-  fillRect(grid, 235, 12, 8, 1, TileType.PLATFORM, TileType.PLATFORM);
-  grid[11][237] = TileType.GIANT_RING;
-  grid[11][240] = TileType.RING;
-
-  // Goal signpost
-  grid[16][244] = TileType.GOAL_POST;
-
+  const lvl = (mysticCavernsAct1Pkg as any).level;
   return {
-    id: 'mystic-caverns-act-1',
-    name: 'Mystic Caverns',
-    act: 1,
-    author: 'Sonic Velocity Studio',
-    width,
-    height,
-    tilesetId: 'mystic-caverns',
-    grid,
-    p1Spawn: { x: 4, y: 19 },
-    p2Spawn: { x: 2, y: 19 },
+    id: lvl.id,
+    name: lvl.name,
+    act: lvl.act,
+    author: lvl.author,
+    width: lvl.width,
+    height: lvl.height,
+    tilesetId: lvl.tilesetId,
+    grid: lvl.grid.map((row: number[]) => [...row]),
+    bgGrid: lvl.bgGrid.map((row: number[]) => [...row]),
+    p1Spawn: { ...lvl.p1Spawn },
+    p2Spawn: { ...lvl.p2Spawn },
   };
 }
-
 // ============================================================================
 // LEVEL 12: MYSTIC CAVERNS ZONE — ACT 2
 // (Expanded Subterranean Grottoes, Multi-Tier Mine Shafts, Stalactite Run,
@@ -3091,7 +2957,7 @@ function buildMysticCavernsAct2(): LevelData {
 
   return {
     id: 'mystic-caverns-act-2',
-    name: 'Mystic Caverns',
+    name: 'Mystic Caverns (Broken)',
     act: 2,
     author: 'Sonic Velocity Studio',
     width,
